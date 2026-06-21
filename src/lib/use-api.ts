@@ -9,7 +9,11 @@ export function useApi<T>(path: string | null) {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(!!path);
   const refreshKey = useStore((s) => s.refreshKey);
+  const userId = useStore((s) => s.userId);
   const role = useStore((s) => s.role);
+
+  // Send the real userId if available; fall back to the role string.
+  const authHeader = userId ?? role;
 
   React.useEffect(() => {
     if (!path) {
@@ -20,7 +24,7 @@ export function useApi<T>(path: string | null) {
     let active = true;
     setLoading(true);
     setError(null);
-    fetch(path, { headers: { "x-ilm-user": role } })
+    fetch(path, { headers: { "x-ilm-user": authHeader } })
       .then(async (res) => {
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
@@ -43,7 +47,7 @@ export function useApi<T>(path: string | null) {
     return () => {
       active = false;
     };
-  }, [path, refreshKey, role]);
+  }, [path, refreshKey, authHeader]);
 
   return { data, error, loading };
 }

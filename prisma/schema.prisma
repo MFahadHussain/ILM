@@ -19,6 +19,7 @@ model User {
   email     String   @unique
   name      String
   avatar    String?
+  password  String?  // hashed (SHA-256 + salt); null only for legacy/demo seed rows
   role      String   @default("student") // student | teacher | reviewer | admin
   // reviewer is a privileged role SEPARATE from admin (per spec §8)
   madhab    String   @default("shia") // shia | sunni

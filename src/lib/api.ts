@@ -7,9 +7,11 @@ export async function apiFetch<T = unknown>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const role = useStore.getState().role;
+  const { userId, role } = useStore.getState();
   const headers = new Headers(init?.headers);
-  headers.set("x-ilm-user", role);
+  // Send the real userId if available; fall back to the role string for
+  // legacy demo accounts that have no userId in localStorage.
+  headers.set("x-ilm-user", userId ?? role);
   if (init?.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }

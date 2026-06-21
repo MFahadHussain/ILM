@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { TrackDto, CourseDto } from "@/lib/types";
 
 export async function GET() {
   const tracks = await db.track.findMany({
@@ -13,7 +12,7 @@ export async function GET() {
     },
   });
 
-  const dtos: TrackDto[] = tracks.map((t) => ({
+  const dtos = tracks.map((t) => ({
     id: t.id,
     title: t.title,
     madhabScope: t.madhabScope,
@@ -21,19 +20,30 @@ export async function GET() {
     icon: t.icon,
     color: t.color,
     order: t.order,
-    courses: t.courses.map((c): CourseDto => ({
+    courses: t.courses.map((c) => ({
       id: c.id,
       trackId: t.id,
       trackTitle: t.title,
       title: c.title,
       description: c.description,
-      difficulty: c.difficulty as CourseDto["difficulty"],
+      difficulty: c.difficulty,
       order: c.order,
       estimatedHours: c.estimatedHours,
       coverColor: c.coverColor,
       prerequisiteIds: c.prerequisiteIds,
       chapterCount: c.chapters.length,
       lessonCount: c.chapters.reduce((n, ch) => n + ch.lessons.length, 0),
+      // Include lesson ids so the Learn view can resolve the first lesson
+      chapters: c.chapters
+        .sort((a, b) => a.order - b.order)
+        .map((ch) => ({
+          id: ch.id,
+          title: ch.title,
+          order: ch.order,
+          lessons: ch.lessons
+            .sort((a, b) => a.order - b.order)
+            .map((l) => ({ id: l.id, title: l.title, order: l.order })),
+        })),
     })),
   }));
 

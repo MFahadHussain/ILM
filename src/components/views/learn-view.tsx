@@ -1095,6 +1095,21 @@ export function LearnView() {
   const setView = useStore((s) => s.setView);
   const openLesson = useStore((s) => s.openLesson);
 
+  // If a course is selected but no specific lesson, auto-resolve the first lesson.
+  const { data: tracksData } = useApi<{ tracks: { id: string; title: string; courses: { id: string; title: string; chapters: { id: string; title: string; order: number; lessons: { id: string; title: string; order: number }[] }[] }[] }[] }>("/api/tracks");
+  React.useEffect(() => {
+    if (!activeLessonId && activeCourseId && tracksData) {
+      const course = tracksData.tracks
+        .flatMap((t) => t.courses)
+        .find((c) => c.id === activeCourseId);
+      const lessons = course?.chapters?.flatMap((ch) => ch.lessons) ?? [];
+      const firstLesson = lessons[0];
+      if (firstLesson) {
+        openLesson(firstLesson.id);
+      }
+    }
+  }, [activeLessonId, activeCourseId, tracksData, openLesson]);
+
   if (!activeLessonId) {
     return (
       <Card className="mx-auto max-w-lg">

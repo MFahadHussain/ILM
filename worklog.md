@@ -377,3 +377,30 @@ Work Log:
 
 Stage Summary:
 - Login page, complete profile (edit dialog + sign out), and developer credit all built and browser-verified.
+
+---
+Task ID: INDIVIDUAL-PROFILES
+Agent: orchestrator (main)
+Task: Real individual profiles — each student has their own account, XP, progress, bookmarks.
+
+Work Log:
+- Schema: added `password String?` to User model (hashed SHA-256+salt); re-pushed.
+- Auth utility: src/lib/auth.ts (hashPassword, verifyPassword).
+- Auth API: POST /api/auth/register (creates new User + fresh UserProfile with xp=0, onboarded=false → triggers onboarding); POST /api/auth/login (validates email+password against DB, demo accounts with null password accept any).
+- Store: changed from storing `role` string to storing real `userId` (persisted in localStorage); login(userId, role) takes the actual DB user ID; setRole preserves userId.
+- apiFetch + useApi: send `userId ?? role` as x-ilm-user header (real user ID for authenticated users, falls back to role string for legacy).
+- LoginView: rewritten to call real auth API — register mode creates a new account (name + email + password), login mode validates credentials; quick demo buttons call /api/auth/login with seeded demo emails.
+- LearnView: added auto-resolve — when activeCourseId is set without activeLessonId, fetches /api/tracks and opens the course's first lesson automatically.
+- Tracks API: extended to include chapter/lesson IDs in the response so LearnView can resolve.
+- Agent Browser end-to-end verification:
+  1. Register "Bilal Ahmed" (bilal@test.com) → new account created → onboarding triggered.
+  2. Complete onboarding → Dashboard with 0 XP, Level 1, no badges, no progress.
+  3. Go to Tracks → Start course (Virtues & Manners of Knowledge) → LearnView auto-resolves first lesson.
+  4. Answer MCQ correctly → "+10 XP" toast → sidebar updates to 10 XP.
+  5. API verification: Bilal (10 XP, Lv1, streak 1) vs Talib demo (285 XP, Lv2, streak 6) — completely separate profiles.
+  6. Logout → login page → login with Bilal's credentials → profile persists (10 XP).
+  7. Each user's data is isolated: XP, streaks, badges, progress, bookmarks, notes.
+- Lint exit 0, typecheck zero errors, 51 requests all 200, zero runtime errors.
+
+Stage Summary:
+- Real individual profiles complete. Each registration creates a fresh user with their own XP/progress/badges. Login validates against the DB. Multiple users have completely isolated data.

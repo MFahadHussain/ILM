@@ -4,7 +4,7 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import {
   Sparkles, Mail, Lock, ArrowRight, GraduationCap, ShieldCheck,
-  BookOpen, Users, Eye, EyeOff, Loader2, Quote,
+  BookOpen, Users, Eye, EyeOff, Loader2, Quote, User as UserIcon,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -35,39 +35,72 @@ export function LoginView() {
   const login = useStore((s) => s.login);
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [name, setName] = React.useState("");
   const [showPw, setShowPw] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [mode, setMode] = React.useState<"signin" | "register">("signin");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       toast.error("Please enter your email and password.");
       return;
     }
+    if (mode === "register" && !name.trim()) {
+      toast.error("Please enter your name.");
+      return;
+    }
     setLoading(true);
-    // Demo auth: match against seeded accounts by email prefix.
-    setTimeout(() => {
-      const lower = email.trim().toLowerCase();
-      if (lower.includes("review") || lower.includes("scholar") || lower === "reviewer@ilm.dev") {
-        login("scholar");
-        toast.success("Welcome back, Dr. Rizvi.");
+    try {
+      if (mode === "register") {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password, name }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Registration failed.");
+        login(data.userId, "student");
+        toast.success(`Welcome to ILM, ${name.split(" ")[0]}!`);
       } else {
-        // default to student for any other email
-        login("student");
-        toast.success("Welcome to ILM.");
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Login failed.");
+        login(data.userId, data.role === "reviewer" ? "scholar" : "student");
+        toast.success(`Welcome back, ${data.displayName?.split(" ")[0] ?? ""}!`);
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   }
 
-  function quickLogin(role: "student" | "scholar") {
+  async function quickLogin(role: "student" | "scholar") {
+    const creds =
+      role === "scholar"
+        ? { email: "reviewer@ilm.dev", password: "demo" }
+        : { email: "talib@ilm.dev", password: "demo" };
     setLoading(true);
-    setTimeout(() => {
-      login(role);
-      toast.success(role === "scholar" ? "Welcome back, Dr. Rizvi." : "Welcome to ILM.");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Login failed.");
+      login(data.userId, data.role === "reviewer" ? "scholar" : "student");
+      toast.success(role === "scholar" ? "Welcome back, Dr. Rizvi." : "Welcome back, Talib.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Login failed.");
+    } finally {
       setLoading(false);
-    }, 400);
+    }
   }
 
   return (
@@ -222,6 +255,24 @@ export function LoginView() {
 
             {/* Email / password form */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === "register" && (
+                <div className="space-y-1.5">
+                  <label htmlFor="name" className="text-sm font-medium">
+                    Full name
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      id="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                      className="h-11 w-full rounded-lg border bg-background pl-10 pr-3 text-sm outline-none ring-offset-background transition placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
+                    />
+                  </div>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label htmlFor="email" className="text-sm font-medium">
                   Email
@@ -303,7 +354,7 @@ export function LoginView() {
             </p>
 
             <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              Demo mode — any email & password works. Use the quick-access buttons above to explore as Student or Scholar.
+              New here? Sign up to create your own profile with personal XP, progress, and bookmarks. The quick-access buttons above use pre-seeded demo accounts.
             </p>
           </div>
         </div>

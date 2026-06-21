@@ -5,34 +5,39 @@ import type { View } from "./types";
 
 const AUTH_KEY = "ilm-auth";
 
-interface AuthState {
+interface PersistedAuth {
+  userId: string | null;
   role: "student" | "scholar";
   isAuthenticated: boolean;
 }
 
-function loadAuth(): AuthState {
+function loadAuth(): PersistedAuth {
   if (typeof window === "undefined") {
-    return { role: "student", isAuthenticated: false };
+    return { userId: null, role: "student", isAuthenticated: false };
   }
   try {
     const raw = localStorage.getItem(AUTH_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AuthState;
-      return { role: parsed.role === "scholar" ? "scholar" : "student", isAuthenticated: !!parsed.isAuthenticated };
+      const parsed = JSON.parse(raw) as PersistedAuth;
+      return {
+        userId: parsed.userId ?? null,
+        role: parsed.role === "scholar" ? "scholar" : "student",
+        isAuthenticated: !!parsed.isAuthenticated,
+      };
     }
   } catch {
     /* ignore */
   }
-  return { role: "student", isAuthenticated: false };
+  return { userId: null, role: "student", isAuthenticated: false };
 }
 
-interface IlmState extends AuthState {
+interface IlmState extends PersistedAuth {
   view: View;
   setView: (v: View) => void;
-  // auth
-  login: (role: "student" | "scholar") => void;
+  // auth — login now takes a real userId + role
+  login: (userId: string, role: "student" | "scholar") => void;
   logout: () => void;
-  // (legacy) role switch while authenticated
+  // role switch (keeps the same userId, just swaps the view set)
   setRole: (r: "student" | "scholar") => void;
   // current lesson id when in the Learn player
   activeLessonId: string | null;
@@ -51,39 +56,41 @@ interface IlmState extends AuthState {
   setUserMadhab: (m: string) => void;
 }
 
+function persist(state: PersistedAuth) {
+  try {
+    localStorage.setItem(AUTH_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
 const initial = loadAuth();
 
 export const useStore = create<IlmState>((set) => ({
   view: initial.role === "scholar" ? "review" : "dashboard",
   setView: (v) => set({ view: v }),
   // auth
+  userId: initial.userId,
   role: initial.role,
   isAuthenticated: initial.isAuthenticated,
-  login: (r) => {
-    const state = { role: r, isAuthenticated: true };
-    try {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(state));
-    } catch {
-      /* ignore */
-    }
+  login: (uid, r) => {
+    const state: PersistedAuth = { userId: uid, role: r, isAuthenticated: true };
+    persist(state);
     set({ ...state, view: r === "scholar" ? "review" : "dashboard" });
   },
   logout: () => {
-    try {
-      localStorage.removeItem(AUTH_KEY);
-    } catch {
-      /* ignore */
-    }
-    set({ isAuthenticated: false, view: "dashboard", activeLessonId: null, activeCourseId: null });
+    const state: PersistedAuth = { userId: null, role: "student", isAuthenticated: false };
+    persist(state);
+    set({ ...state, view: "dashboard", activeLessonId: null, activeCourseId: null });
   },
   setRole: (r) => {
-    const next = { role: r, isAuthenticated: true };
-    try {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-    set({ ...next, view: r === "scholar" ? "review" : "dashboard" });
+    const state: PersistedAuth = {
+      userId: useStore.getState().userId,
+      role: r,
+      isAuthenticated: true,
+    };
+    persist(state);
+    set({ role: r, view: r === "scholar" ? "review" : "dashboard" });
   },
   activeLessonId: null,
   openLesson: (id) => set({ activeLessonId: id, view: "learn" }),
