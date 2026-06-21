@@ -1,0 +1,326 @@
+// ILM — Gamified Shia Islamic Studies Platform
+// Prisma schema (SQLite). All content served to students is gated by is_reviewed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// AUTH & USERS
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  role      String   @default("student") // student | teacher | reviewer | admin
+  // reviewer is a privileged role SEPARATE from admin (per spec §8)
+  madhab    String   @default("shia") // shia | sunni
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile       UserProfile?
+  progress      ProgressRecord[]
+  badges        UserBadge[]
+  medals        UserMedal[]
+  activity      ActivityLog[]
+  bookmarks     Bookmark[]
+  notes         Note[]
+  reviews       TextUnit[]      @relation("ReviewByUser")
+  submissions   AnswerSubmission[]
+}
+
+model UserProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName         String
+  xp                  Int      @default(0)
+  level               Int      @default(1)
+  streakCount         Int      @default(0)
+  streakFreezeCount   Int      @default(3) // limited monthly freezes (humane, not predatory)
+  longestStreak       Int      @default(0)
+  lastActivityDate    String?  // YYYY-MM-DD
+  dailyGoalXp         Int      @default(50)
+  publicProfile       Boolean  @default(false)
+  leaderboardOptIn    Boolean  @default(false) // opt-in, never default-on
+  language            String   @default("en") // en | ar | ur | fa
+  totalBadges         Int      @default(0)
+  totalMedals         Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// ISLAMIC LIBRARY ENGINE
+// ---------------------------------------------------------------------------
+
+model Book {
+  id            String      @id @default(cuid())
+  title         String
+  titleArabic   String?
+  author        String
+  language      String      @default("ar")
+  madhabScope   String      @default("shia") // shia | sunni | shared
+  category      String      // hadith | tafsir | supplication | sermon | fiqh | history
+  description   String?
+  totalUnits    Int         @default(0)
+  reviewedUnits Int         @default(0)
+  textUnits     TextUnit[]
+  createdAt     DateTime    @default(now())
+}
+
+// Tag stored as rows; TextUnit <-> TopicTag is many-to-many
+model TopicTag {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  textUnits TextUnit[]
+}
+
+model TextUnit {
+  id                   String      @id @default(cuid())
+  bookId               String
+  book                 Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  locator              String      // e.g. "Al-Kafi 1:12, H.1" or "Nahj al-Balagha, Sermon 1"
+  volume               String?
+  chapter              String?
+  pageOrHadithNumber   String?
+  arabicText           String
+  translationText      String
+  transliteration      String?
+  chainOfNarration     String?
+  authenticityGrade    String      // e.g. "Sahih" / "Hasan" / "Da'if" / "Muwaththaq"
+  gradeReference       String      // stated real reference for the grade — never blank-but-implied
+  madhabScope          String      @default("shia")
+  topicTags           TopicTag[]
+  // REVIEW GATE — hard production gate, enforced at API layer
+  isReviewed           Boolean     @default(false)
+  reviewedBy           String?
+  reviewer             User?       @relation("ReviewByUser", fields: [reviewedBy], references: [id])
+  reviewedAt           DateTime?
+  reviewNotes          String?
+  // AI-assistance provenance
+  aiAssisted           Boolean     @default(false)
+  status               String      @default("draft") // draft | in_review | published | rejected
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  // reverse relations
+  lessonsCiting        LessonTextUnit[]
+  exercises            Exercise[]
+  bookmarks            Bookmark[]
+  notes                Note[]
+}
+
+// Explicit join table TextUnit <-> TopicTag (named relation for clarity)
+// (Prisma implicit M:N above uses TopicTag.textUnits / TextUnit.topicTags)
+
+// ---------------------------------------------------------------------------
+// CURRICULUM: Track -> Course -> Chapter -> Lesson -> Exercise
+// ---------------------------------------------------------------------------
+
+model Track {
+  id          String    @id @default(cuid())
+  title       String
+  madhabScope String    @default("shia")
+  description String?
+  icon        String?
+  color       String?   // tailwind-ish accent token
+  order       Int       @default(0)
+  courses     Course[]
+  createdAt   DateTime  @default(now())
+}
+
+model Course {
+  id                   String         @id @default(cuid())
+  trackId              String
+  track                Track          @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  title                String
+  description          String?
+  difficulty           String         @default("beginner") // beginner | intermediate | advanced | hawza_prep
+  order                Int            @default(0)
+  // prerequisites as a simple comma-separated list of course ids (DAG stored cheaply on SQLite)
+  prerequisiteIds      String?
+  estimatedHours       Int            @default(2)
+  coverColor           String?
+  chapters             Chapter[]
+  progress             ProgressRecord[]
+  createdAt            DateTime       @default(now())
+}
+
+model Chapter {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id          String           @id @default(cuid())
+  chapterId   String
+  chapter     Chapter          @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  title       String
+  summary     String?
+  contentBody String           // markdown explainer
+  estimatedMin Int            @default(10)
+  order       Int              @default(0)
+  citedUnits  LessonTextUnit[]
+  exercises   Exercise[]
+  progress    ProgressRecord[]
+  bookmarks   Bookmark[]
+  notes       Note[]
+}
+
+// Many-to-many: a lesson cites one or more reviewed TextUnits (no lesson floats free)
+model LessonTextUnit {
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  textUnitId  String
+  textUnit    TextUnit @relation(fields: [textUnitId], references: [id], onDelete: Cascade)
+  contextNote String?  // why this unit is cited here
+}
+
+model Exercise {
+  id              String   @id @default(cuid())
+  lessonId        String
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  type            String   // mcq | fill_blank | ordering | matching | short_answer
+  prompt          String
+  // JSON-encoded options/answer_key. For MCQ: {options:[...], correctIndex}. For ordering: {items, correctOrder}. Etc.
+  payload         String
+  xpReward        Int      @default(10)
+  difficulty      String   @default("beginner")
+  // ANSWER KEY must link back to a reviewed TextUnit (for ruling/creed/history claims)
+  sourceTextUnitId String?
+  sourceTextUnit   TextUnit? @relation(fields: [sourceTextUnitId], references: [id])
+  status          String   @default("published") // draft | published
+  aiAssisted      Boolean  @default(false)
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  submissions     AnswerSubmission[]
+}
+
+// ---------------------------------------------------------------------------
+// GAMIFICATION
+// ---------------------------------------------------------------------------
+
+model BadgeCatalog {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  slug      String       @unique
+  description String
+  criteriaRule String    // server-evaluated rule key, e.g. "complete_book:nhb"
+  rarity    String       @default("common") // common | rare | epic | legendary
+  icon      String       // lucide icon name
+  color     String?
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     BadgeCatalog @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  earnedAt  DateTime    @default(now())
+  @@unique([userId, badgeId])
+}
+
+model MedalCatalog {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  slug      String       @unique
+  description String
+  criteriaRule String
+  tier       String      @default("gold") // silver | gold | platinum
+  icon      String
+  userMedals UserMedal[]
+}
+
+model UserMedal {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medalId   String
+  medal     MedalCatalog @relation(fields: [medalId], references: [id], onDelete: Cascade)
+  earnedAt  DateTime    @default(now())
+  @@unique([userId, medalId])
+}
+
+// Per-lesson & per-course progress
+model ProgressRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // exactly one of these is set:
+  lessonId    String?
+  lesson      Lesson?  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  courseId    String?
+  course      Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status      String   @default("in_progress") // in_progress | completed
+  score       Int      @default(0) // 0-100
+  xpEarned    Int      @default(0)
+  completedAt DateTime?
+  updatedAt   DateTime @updatedAt
+  @@unique([userId, lessonId])
+  @@unique([userId, courseId])
+}
+
+model AnswerSubmission {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  answer      String
+  isCorrect   Boolean
+  xpAwarded   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+// One row per calendar day the user was active — powers streak + heatmap
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateKey   String   // YYYY-MM-DD
+  xpGained  Int      @default(0)
+  exercises Int      @default(0)
+  lessons   Int      @default(0)
+  createdAt DateTime @default(now())
+  @@unique([userId, dateKey])
+}
+
+model Bookmark {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  textUnitId String?
+  textUnit   TextUnit? @relation(fields: [textUnitId], references: [id], onDelete: SetNull)
+  lessonId   String?
+  lesson     Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  note       String?
+  createdAt  DateTime  @default(now())
+}
+
+model Note {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId   String?
+  lesson     Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  textUnitId String?
+  textUnit   TextUnit? @relation(fields: [textUnitId], references: [id], onDelete: SetNull)
+  body       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
