@@ -6,8 +6,14 @@ export type View =
   | "tracks"
   | "learn"
   | "profile"
+  | "achievements"
+  | "notes"
+  | "settings"
   | "leaderboard"
-  | "review";
+  | "review"
+  | "authoring"
+  | "my-reviews"
+  | "onboarding";
 
 export type ExerciseType = "mcq" | "fill_blank" | "ordering" | "matching" | "short_answer";
 
@@ -194,6 +200,21 @@ export interface ProfileDto {
   badges: BadgeDto[];
   medals: MedalDto[];
   bookmarks: { id: string; textUnitLocator: string | null; lessonTitle: string | null; note: string | null }[];
+  // settings & onboarding (follow-up build)
+  onboarded: boolean;
+  interests: string[];
+  rtlOverride: string | null;
+  dailyReminderEnabled: boolean;
+  dailyReminderTime: string | null;
+  streakAlertsEnabled: boolean;
+  // scholar stats (populated when role === reviewer)
+  reviewerStats?: {
+    itemsReviewed: number;
+    itemsApproved: number;
+    itemsRejected: number;
+    avgReviewHours: number | null;
+    lastReviewAt: string | null;
+  };
 }
 
 export interface LeaderboardEntry {
@@ -229,4 +250,68 @@ export interface ReviewQueueItem {
   chainOfNarration: string | null;
   topicTags: string[];
   status: string;
+}
+
+// ---------------------------------------------------------------------------
+// Follow-up build DTOs
+// ---------------------------------------------------------------------------
+
+export interface NoteDto {
+  id: string;
+  userId: string;
+  lessonId: string | null;
+  lessonTitle: string | null;
+  textUnitId: string | null;
+  textUnitLocator: string | null;
+  textUnitBookTitle: string | null;
+  textUnitSnippet: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookmarkDto {
+  id: string;
+  userId: string;
+  textUnitId: string | null;
+  textUnitLocator: string | null;
+  textUnitBookTitle: string | null;
+  textUnitBookId: string | null;
+  textUnitSnippet: string | null;
+  lessonId: string | null;
+  lessonTitle: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface SearchResult {
+  textUnits: { id: string; locator: string; bookTitle: string; arabicText: string; translationSnippet: string; grade: string; madhabScope: string }[];
+  courses: { id: string; title: string; trackTitle: string; difficulty: string; madhabScope: string }[];
+  tracks: { id: string; title: string; madhabScope: string; description: string | null }[];
+}
+
+export interface MyReviewItem {
+  id: string;
+  locator: string;
+  bookTitle: string;
+  arabicText: string;
+  translationSnippet: string;
+  status: string;
+  authenticityGrade: string;
+  reviewNotes: string | null;
+  reviewedAt: string;
+  aiAssisted: boolean;
+}
+
+export interface AuthoringNode {
+  id: string;
+  title: string;
+  type: "track" | "course" | "chapter" | "lesson";
+  madhabScope?: string;
+  difficulty?: string;
+  order: number;
+  children?: AuthoringNode[];
+  lessonCount?: number;
+  citedUnitCount?: number;
+  exerciseCount?: number;
 }

@@ -154,6 +154,32 @@ export async function loadProfile(userId: string): Promise<ProfileDto | null> {
       lessons: a.lessons,
     }));
 
+  // ---- reviewer stats (if scholar) ----
+  let reviewerStats: ProfileDto["reviewerStats"] | undefined;
+  if (user.role === "reviewer") {
+    const reviewed = await db.textUnit.findMany({
+      where: { reviewedBy: user.id },
+      select: { status: true, reviewedAt: true },
+    });
+    const approved = reviewed.filter((r) => r.status === "published").length;
+    const rejected = reviewed.filter((r) => r.status === "rejected").length;
+    const reviewedTimes = reviewed
+      .filter((r) => r.reviewedAt)
+      .map((r) => r.reviewedAt!.getTime());
+    const lastReviewAt = reviewedTimes.length
+      ? new Date(Math.max(...reviewedTimes)).toISOString()
+      : null;
+    // avg "review time" — proxy: not available without a submittedAt on TextUnit;
+    // we report null for now (the field is wired for future use).
+    reviewerStats = {
+      itemsReviewed: reviewed.length,
+      itemsApproved: approved,
+      itemsRejected: rejected,
+      avgReviewHours: null,
+      lastReviewAt,
+    };
+  }
+
   return {
     userId: user.id,
     displayName: p.displayName,
@@ -184,6 +210,14 @@ export async function loadProfile(userId: string): Promise<ProfileDto | null> {
       lessonTitle: bm.lesson?.title ?? null,
       note: bm.note,
     })),
+    // settings & onboarding
+    onboarded: p.onboarded,
+    interests: p.interests ? p.interests.split(",").filter(Boolean) : [],
+    rtlOverride: p.rtlOverride,
+    dailyReminderEnabled: p.dailyReminderEnabled,
+    dailyReminderTime: p.dailyReminderTime,
+    streakAlertsEnabled: p.streakAlertsEnabled,
+    reviewerStats,
   };
 }
 

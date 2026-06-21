@@ -47,7 +47,7 @@ export function MadhabBadge({ scope, className }: { scope: string; className?: s
         "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset",
         isShia
           ? "bg-emerald-50 text-emerald-700 ring-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-          : "bg-teal-50 text-teal-700 ring-teal-500/30 dark:bg-teal-500/10 dark:text-teal-300",
+          : "bg-blue-50 text-blue-700 ring-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300",
         className
       )}
     >

@@ -3,7 +3,9 @@
 import * as React from "react";
 import {
   LayoutDashboard, LibraryBig, GraduationCap, BookOpen, User as UserIcon,
-  Trophy, ShieldCheck, Moon, Sun, Menu, X, Sparkles, ChevronRight,
+  Trophy, ShieldCheck, Menu, Sparkles, ChevronRight, Settings as SettingsIcon,
+  Award, StickyNote, Search, PenSquare, History, Moon, Sun, ClipboardCheck,
+  CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useApi } from "@/lib/use-api";
@@ -15,6 +17,7 @@ import { useTheme } from "next-themes";
 import { LevelRing } from "./level-ring";
 import { XpBar } from "./xp-bar";
 import { StreakBadge } from "./streak-badge";
+import { CommandPalette } from "./command-palette";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { LibraryView } from "@/components/views/library-view";
 import { TracksView } from "@/components/views/tracks-view";
@@ -22,38 +25,122 @@ import { LearnView } from "@/components/views/learn-view";
 import { ProfileView } from "@/components/views/profile-view";
 import { LeaderboardView } from "@/components/views/leaderboard-view";
 import { ReviewView } from "@/components/views/review-view";
+import { AchievementsView } from "@/components/views/achievements-view";
+import { NotesView } from "@/components/views/notes-view";
+import { SettingsView } from "@/components/views/settings-view";
+import { AuthoringView } from "@/components/views/authoring-view";
+import { MyReviewsView } from "@/components/views/my-reviews-view";
+import { OnboardingView } from "@/components/views/onboarding-view";
 
-const NAV: { label: string; icon: React.ComponentType<{ className?: string }>; view: string; scholarOnly?: boolean }[] = [
+interface NavItem {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  view: string;
+}
+
+// Student nav — order: Dashboard, Library, Tracks, Learn, Profile, Achievements, Notes, Leaderboard
+const STUDENT_NAV: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, view: "dashboard" },
   { label: "Library", icon: LibraryBig, view: "library" },
   { label: "Tracks", icon: GraduationCap, view: "tracks" },
   { label: "Learn", icon: BookOpen, view: "learn" },
   { label: "Profile", icon: UserIcon, view: "profile" },
+  { label: "Achievements", icon: Award, view: "achievements" },
+  { label: "Notes", icon: StickyNote, view: "notes" },
   { label: "Leaderboard", icon: Trophy, view: "leaderboard" },
-  { label: "Review Queue", icon: ShieldCheck, view: "review", scholarOnly: true },
 ];
 
-function ThemeToggle() {
+// Scholar nav — entirely swapped, not permission-gated (spec §8)
+const SCHOLAR_NAV: NavItem[] = [
+  { label: "Review Queue", icon: ShieldCheck, view: "review" },
+  { label: "Content Authoring", icon: PenSquare, view: "authoring" },
+  { label: "Library", icon: LibraryBig, view: "library" },
+  { label: "My Reviews", icon: History, view: "my-reviews" },
+];
+
+function ThemeToggleInline() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   if (!mounted) return <div className="size-9" />;
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      aria-label="Toggle theme"
-    >
+    <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
       {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
     </Button>
   );
 }
 
+function ScholarCard({ profile }: { profile: ProfileDto }) {
+  const rs = profile.reviewerStats;
+  if (!rs) return null;
+  return (
+    <div className="mx-3 mb-3 rounded-xl border bg-card p-3 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        <div className="flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-emerald-700 text-white">
+          <ShieldCheck className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold">{profile.displayName}</div>
+          <div className="text-[11px] font-semibold text-emerald-600">Scholar · Reviewer</div>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-muted/60 p-1.5">
+          <div className="text-sm font-bold">{rs.itemsReviewed}</div>
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Reviewed</div>
+        </div>
+        <div className="rounded-lg bg-muted/60 p-1.5">
+          <div className="flex items-center justify-center gap-0.5 text-sm font-bold text-emerald-600">
+            <CheckCircle2 className="size-3" />
+            {rs.itemsApproved}
+          </div>
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Approved</div>
+        </div>
+        <div className="rounded-lg bg-muted/60 p-1.5">
+          <div className="flex items-center justify-center gap-0.5 text-sm font-bold text-rose-600">
+            <XCircle className="size-3" />
+            {rs.itemsRejected}
+          </div>
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Rejected</div>
+        </div>
+      </div>
+      {rs.lastReviewAt && (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Clock className="size-3" />
+          Last review: {new Date(rs.lastReviewAt).toLocaleDateString()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentCard({ profile }: { profile: ProfileDto }) {
+  return (
+    <div className="mx-3 mb-3 rounded-xl border bg-card p-3 shadow-sm">
+      <div className="flex items-center gap-3">
+        <LevelRing levelInfo={profile.levelInfo} size={52} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold">{profile.displayName}</div>
+          <div className="text-[11px] text-muted-foreground">
+            Lv {profile.level} · {profile.xp} XP
+          </div>
+        </div>
+      </div>
+      <div className="mt-2.5">
+        <XpBar levelInfo={profile.levelInfo} xp={profile.xp} />
+      </div>
+      <div className="mt-2.5">
+        <StreakBadge streak={profile.streakCount} freezes={profile.streakFreezeCount} />
+      </div>
+    </div>
+  );
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { view, setView, role, setRole } = useStore();
+  const { view, setView, role, setRole, setSearchOpen } = useStore();
   const { data } = useApi<{ profile: ProfileDto }>("/api/me");
   const profile = data?.profile;
+  const nav = role === "scholar" ? SCHOLAR_NAV : STUDENT_NAV;
 
   return (
     <div className="flex h-full flex-col">
@@ -65,44 +152,33 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div>
           <div className="text-lg font-extrabold tracking-tight ilm-gradient-text">ILM</div>
           <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Islamic Studies
+            {role === "scholar" ? "Scholar Portal" : "Islamic Studies"}
           </div>
         </div>
       </div>
 
-      {/* User card */}
-      {profile && (
-        <div className="mx-3 mb-3 rounded-xl border bg-card p-3 shadow-sm">
-          <div className="flex items-center gap-3">
-            <LevelRing levelInfo={profile.levelInfo} size={52} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold">{profile.displayName}</div>
-              <div className="text-[11px] text-muted-foreground">
-                Lv {profile.level} · {profile.xp} XP
-              </div>
-            </div>
-          </div>
-          <div className="mt-2.5">
-            <XpBar levelInfo={profile.levelInfo} xp={profile.xp} />
-          </div>
-          <div className="mt-2.5">
-            <StreakBadge streak={profile.streakCount} freezes={profile.streakFreezeCount} />
-          </div>
-        </div>
-      )}
+      {/* User / Scholar card */}
+      {profile && (role === "scholar" ? <ScholarCard profile={profile} /> : <StudentCard profile={profile} />)}
 
       {/* Nav */}
-      <nav className="flex-1 space-y-1 px-3 pb-3">
-        {NAV.filter((n) => !n.scholarOnly || role === "scholar").map((item) => {
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3 ilm-scroll">
+        {/* Global search trigger (top of nav on mobile where there's no header search) */}
+        <button
+          onClick={() => { setSearchOpen(true); onNavigate?.(); }}
+          className="mb-2 flex w-full items-center gap-3 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground transition hover:border-primary/50 hover:text-foreground lg:hidden"
+        >
+          <Search className="size-4" />
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-semibold">⌘K</kbd>
+        </button>
+
+        {nav.map((item) => {
           const active = view === item.view;
           const Icon = item.icon;
           return (
             <button
               key={item.view}
-              onClick={() => {
-                setView(item.view as never);
-                onNavigate?.();
-              }}
+              onClick={() => { setView(item.view as never); onNavigate?.(); }}
               className={cn(
                 "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 active
@@ -112,52 +188,85 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             >
               <Icon className="size-4.5 shrink-0" />
               {item.label}
-              {item.scholarOnly && (
-                <span className="ml-auto rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-600">
-                  Scholar
-                </span>
-              )}
             </button>
           );
         })}
       </nav>
 
-      {/* Role switch + theme */}
+      {/* Settings + Role switch */}
       <div className="border-t p-3">
+        {role === "student" && (
+          <button
+            onClick={() => { setView("settings"); onNavigate?.(); }}
+            className={cn(
+              "mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+              view === "settings"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+          >
+            <SettingsIcon className="size-4.5 shrink-0" />
+            Settings
+          </button>
+        )}
         <div className="mb-2 flex items-center justify-between rounded-lg bg-muted/60 p-1 text-xs font-semibold">
           <button
             onClick={() => setRole("student")}
-            className={cn(
-              "flex-1 rounded-md px-2 py-1.5 transition",
-              role === "student" ? "bg-background shadow-sm" : "text-muted-foreground"
-            )}
+            className={cn("flex-1 rounded-md px-2 py-1.5 transition", role === "student" ? "bg-background shadow-sm" : "text-muted-foreground")}
           >
             Student
           </button>
           <button
             onClick={() => setRole("scholar")}
-            className={cn(
-              "flex-1 rounded-md px-2 py-1.5 transition",
-              role === "scholar" ? "bg-background shadow-sm" : "text-muted-foreground"
-            )}
+            className={cn("flex-1 rounded-md px-2 py-1.5 transition", role === "scholar" ? "bg-background shadow-sm" : "text-muted-foreground")}
           >
             Scholar
           </button>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Demo role switch</span>
-          <ThemeToggle />
+          <ThemeToggleInline />
         </div>
       </div>
     </div>
   );
 }
 
+function HeaderSearchButton() {
+  const { setSearchOpen } = useStore();
+  return (
+    <button
+      onClick={() => setSearchOpen(true)}
+      className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted w-56"
+    >
+      <Search className="size-4" />
+      <span className="flex-1 text-left">Search…</span>
+      <kbd className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-semibold">⌘K</kbd>
+    </button>
+  );
+}
+
 export function AppShell() {
-  const { view } = useStore();
+  const { view, role } = useStore();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const { data } = useApi<{ profile: ProfileDto }>("/api/me");
   const profile = data?.profile;
+
+  // Sync userMadhab from profile
+  const setUserMadhab = useStore((s) => s.setUserMadhab);
+  React.useEffect(() => {
+    if (profile?.madhab) setUserMadhab(profile.madhab);
+  }, [profile?.madhab, setUserMadhab]);
+
+  // Onboarding gate: if student and not onboarded, show onboarding
+  if (profile && !profile.onboarded && role === "student" && view !== "onboarding") {
+    return (
+      <>
+        <OnboardingView />
+        <CommandPalette />
+      </>
+    );
+  }
 
   const titleMap: Record<string, string> = {
     dashboard: "Dashboard",
@@ -165,12 +274,22 @@ export function AppShell() {
     tracks: "Learning Tracks",
     learn: "Lesson Player",
     profile: "My Profile",
+    achievements: "Achievements",
+    notes: "Notes & Bookmarks",
+    settings: "Settings",
     leaderboard: "Leaderboard",
     review: "Scholar Review Queue",
+    authoring: "Content Authoring",
+    "my-reviews": "My Reviews",
+    onboarding: "Welcome to ILM",
   };
+
+  const showStudentHeader = role === "student";
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <CommandPalette />
+
       {/* Top bar (mobile) */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-background/80 px-4 py-2.5 backdrop-blur lg:hidden">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -188,35 +307,36 @@ export function AppShell() {
           <Sparkles className="size-5 text-primary" />
           <span className="font-extrabold ilm-gradient-text">ILM</span>
         </div>
-        {profile && (
+        {profile && showStudentHeader && (
           <div className="flex items-center gap-2 text-sm">
-            <span className="flex items-center gap-1 font-bold text-orange-600">
-              🔥{profile.streakCount}
-            </span>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-              {profile.xp} XP
-            </span>
+            <span className="flex items-center gap-1 font-bold text-orange-600">🔥{profile.streakCount}</span>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{profile.xp} XP</span>
           </div>
         )}
       </header>
 
       <div className="flex flex-1">
-        {/* Sidebar (desktop) */}
         <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r bg-sidebar lg:block">
           <SidebarContent />
         </aside>
 
-        {/* Main */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Desktop top bar */}
           <header className="sticky top-0 z-20 hidden items-center justify-between border-b bg-background/80 px-8 py-3 backdrop-blur lg:flex">
-            <div>
-              <h1 className="text-lg font-bold tracking-tight">{titleMap[view] ?? "ILM"}</h1>
-              <p className="text-xs text-muted-foreground">
-                {profile ? `Assalamu ʿalaykum, ${profile.displayName.split(" ")[0]}.` : "Loading…"}
-              </p>
+            <div className="flex items-center gap-6">
+              <div>
+                <h1 className="text-lg font-bold tracking-tight">{titleMap[view] ?? "ILM"}</h1>
+                <p className="text-xs text-muted-foreground">
+                  {profile
+                    ? role === "scholar"
+                      ? `Reviewing as ${profile.displayName}`
+                      : `Assalamu ʿalaykum, ${profile.displayName.split(" ")[0]}.`
+                    : "Loading…"}
+                </p>
+              </div>
+              <HeaderSearchButton />
             </div>
-            {profile && (
+            {profile && showStudentHeader && (
               <div className="flex items-center gap-4">
                 <StreakBadge streak={profile.streakCount} freezes={profile.streakFreezeCount} />
                 <div className="h-8 w-px bg-border" />
@@ -224,11 +344,15 @@ export function AppShell() {
                   <LevelRing levelInfo={profile.levelInfo} size={40} />
                   <div className="text-right">
                     <div className="text-sm font-bold leading-none">{profile.xp} XP</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {profile.levelInfo.title}
-                    </div>
+                    <div className="text-[11px] text-muted-foreground">{profile.levelInfo.title}</div>
                   </div>
                 </div>
+              </div>
+            )}
+            {profile && role === "scholar" && (
+              <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <ClipboardCheck className="size-4" />
+                {profile.reviewerStats?.itemsReviewed ?? 0} items reviewed
               </div>
             )}
           </header>
@@ -240,8 +364,14 @@ export function AppShell() {
               {view === "tracks" && <TracksView />}
               {view === "learn" && <LearnView />}
               {view === "profile" && <ProfileView />}
+              {view === "achievements" && <AchievementsView />}
+              {view === "notes" && <NotesView />}
+              {view === "settings" && <SettingsView />}
               {view === "leaderboard" && <LeaderboardView />}
               {view === "review" && <ReviewView />}
+              {view === "authoring" && <AuthoringView />}
+              {view === "my-reviews" && <MyReviewsView />}
+              {view === "onboarding" && <OnboardingView />}
             </div>
           </main>
 
@@ -259,7 +389,7 @@ export function AppShell() {
                   <ShieldCheck className="size-3.5 text-emerald-600" />
                   <span>Scholar-reviewed</span>
                   <ChevronRight className="size-3" />
-                  <span className="font-mono">v0.1</span>
+                  <span className="font-mono">v0.2</span>
                 </div>
               </div>
             </div>

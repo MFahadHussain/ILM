@@ -77,7 +77,7 @@ function MadhabPill({ madhab }: { madhab: string }) {
     m === "shia"
       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300 ring-emerald-500/30"
       : m === "sunni"
-      ? "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300 ring-sky-500/30"
+      ? "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300 ring-blue-500/30"
       : "bg-zinc-200 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300 ring-zinc-400/30";
   return (
     <span
@@ -91,7 +91,7 @@ function MadhabPill({ madhab }: { madhab: string }) {
   );
 }
 
-function CourseCard({ course }: { course: CourseDto }) {
+function CourseCard({ course, trackMadhab }: { course: CourseDto; trackMadhab: string }) {
   const setActiveCourseId = useStore((s) => s.setActiveCourseId);
   const setView = useStore((s) => s.setView);
   const c = colorFor(course.coverColor);
@@ -122,14 +122,17 @@ function CourseCard({ course }: { course: CourseDto }) {
               {course.trackTitle}
             </p>
           </div>
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset",
-              DIFFICULTY[course.difficulty]
-            )}
-          >
-            {course.difficulty.replace("_", " ")}
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <MadhabPill madhab={trackMadhab} />
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset",
+                DIFFICULTY[course.difficulty]
+              )}
+            >
+              {course.difficulty.replace("_", " ")}
+            </span>
+          </div>
         </div>
 
         <p className="text-sm text-muted-foreground line-clamp-2">
@@ -212,7 +215,7 @@ function TrackSection({ track, index }: { track: TrackDto; index: number }) {
           .slice()
           .sort((a, b) => a.order - b.order)
           .map((course) => (
-            <CourseCard key={course.id} course={course} />
+            <CourseCard key={course.id} course={course} trackMadhab={track.madhabScope} />
           ))}
       </div>
     </motion.section>

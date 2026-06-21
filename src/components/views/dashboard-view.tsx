@@ -43,6 +43,7 @@ import {
 } from "recharts";
 import { LevelRing } from "@/components/ilm/level-ring";
 import { StreakBadge } from "@/components/ilm/streak-badge";
+import { ActivityHeatmap } from "@/components/ilm/activity-heatmap";
 import { IlmIcon } from "@/components/ilm/icon";
 
 // ---------------------------------------------------------------------------
@@ -734,6 +735,59 @@ export function DashboardView() {
             </Button>
           </CardFooter>
         </Card>
+      </SectionReveal>
+
+      {/* 7. Streak heatmap + daily goal (follow-up build §5) */}
+      <SectionReveal delay={0.3}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Flame className="size-4 text-orange-500" />
+                Activity heatmap
+              </CardTitle>
+              <CardDescription>
+                Last 17 weeks of study — each cell is one day, intensity by XP earned.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ActivityHeatmap activity={profile.activity} weeks={17} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="size-4 text-primary" />
+                Daily goal
+              </CardTitle>
+              <CardDescription>
+                Complete {profile.dailyGoalXp} XP today to maintain your streak.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center gap-3 py-2">
+                <DailyGoalRing today={profile.todayXp} goal={profile.dailyGoalXp} />
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{profile.todayXp}</div>
+                  <div className="text-xs text-muted-foreground">
+                    of {profile.dailyGoalXp} XP today
+                  </div>
+                </div>
+                <div className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  profile.todayXp >= profile.dailyGoalXp
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+                    : "bg-muted text-muted-foreground"
+                )}>
+                  {profile.todayXp >= profile.dailyGoalXp
+                    ? "🎉 Goal achieved!"
+                    : `${profile.dailyGoalXp - profile.todayXp} XP to go`}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </SectionReveal>
     </div>
   );

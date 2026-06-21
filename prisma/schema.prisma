@@ -53,6 +53,14 @@ model UserProfile {
   language            String   @default("en") // en | ar | ur | fa
   totalBadges         Int      @default(0)
   totalMedals         Int      @default(0)
+  // onboarding & settings (follow-up build)
+  onboarded           Boolean  @default(false)
+  interests           String?  // comma-separated: Fiqh,Aqeedah,History,Akhlaq
+  rtlOverride         String?  // null=auto, "ltr" | "rtl"
+  dailyReminderEnabled Boolean @default(false)
+  dailyReminderTime   String?  // "HH:MM" 24h
+  streakAlertsEnabled Boolean  @default(true)
+  preferredTranslations String? // JSON map bookId->translator label (Phase 2; stored now)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }

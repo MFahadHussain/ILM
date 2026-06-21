@@ -76,6 +76,7 @@ import {
 
 import { ArabicText } from "@/components/ilm/arabic-text";
 import { GradeBadge } from "@/components/ilm/grade-badge";
+import { CitationStrip } from "@/components/ilm/citation-strip";
 
 // The /api/lessons/[id]/submit response actually returns two extra fields
 // beyond the shared SubmitAnswerResult DTO (correctCount, totalExercises).
@@ -937,6 +938,11 @@ function LessonPlayer({
             </CardContent>
           )}
         </Card>
+
+        {/* Citation strip (spec §6 — persistent trust-layer bar, tap to expand full TextUnit) */}
+        {lesson.citedUnits.length > 0 && (
+          <CitationStrip citedUnits={lesson.citedUnits} />
+        )}
 
         {/* Lesson content body */}
         <Card>

@@ -1,0 +1,903 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { motion } from "framer-motion";
+     5→import {
+     6→  Flame,
+     7→  Trophy,
+     8→  Medal as MedalIcon,
+     9→  Bookmark,
+    10→  Lock,
+    11→  Sparkles,
+    12→  ShieldCheck,
+    13→  Eye,
+    14→  Target,
+    15→  BookCheck,
+    16→} from "lucide-react";
+    17→import { useApi } from "@/lib/use-api";
+    18→import { useStore } from "@/lib/store";
+    19→import { apiFetch } from "@/lib/api";
+    20→import type {
+    21→  ProfileDto,
+    22→  BadgeDto,
+    23→  MedalDto,
+    24→  ActivityDay,
+    25→} from "@/lib/types";
+    26→import { IlmIcon } from "@/components/ilm/icon";
+    27→import { LevelRing } from "@/components/ilm/level-ring";
+    28→import { XpBar } from "@/components/ilm/xp-bar";
+    29→import { Card } from "@/components/ui/card";
+    30→import { Button } from "@/components/ui/button";
+    31→import { Skeleton } from "@/components/ui/skeleton";
+    32→import { Switch } from "@/components/ui/switch";
+    33→import { Label } from "@/components/ui/label";
+    34→import {
+    35→  Tabs,
+    36→  TabsList,
+    37→  TabsTrigger,
+    38→  TabsContent,
+    39→} from "@/components/ui/tabs";
+    40→import {
+    41→  Select,
+    42→  SelectTrigger,
+    43→  SelectValue,
+    44→  SelectContent,
+    45→  SelectItem,
+    46→} from "@/components/ui/select";
+    47→import {
+    48→  Tooltip,
+    49→  TooltipTrigger,
+    50→  TooltipContent,
+    51→} from "@/components/ui/tooltip";
+    52→import { cn } from "@/lib/utils";
+    53→import { toast } from "sonner";
+    54→
+    55→// ------------------------------------------------------------------
+    56→// Helpers
+    57→// ------------------------------------------------------------------
+    58→function initials(name: string) {
+    59→  return (
+    60→    name
+    61→      .split(/\s+/)
+    62→      .filter(Boolean)
+    63→      .slice(0, 2)
+    64→      .map((s) => s[0]?.toUpperCase() ?? "")
+    65→      .join("") || "?"
+    66→  );
+    67→}
+    68→
+    69→function fmtDate(iso: string | null) {
+    70→  if (!iso) return "";
+    71→  try {
+    72→    return new Date(iso).toLocaleDateString("en-US", {
+    73→      month: "short",
+    74→      day: "numeric",
+    75→      year: "numeric",
+    76→    });
+    77→  } catch {
+    78→    return "";
+    79→  }
+    80→}
+    81→
+    82→const RARITY_STYLE: Record<
+    83→  BadgeDto["rarity"],
+    84→  { circle: string; ring: string; label: string; text: string }
+    85→> = {
+    86→  common: {
+    87→    circle: "bg-zinc-100 dark:bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
+    88→    ring: "ring-zinc-400/30",
+    89→    label: "Common",
+    90→    text: "text-zinc-600 dark:text-zinc-300",
+    91→  },
+    92→  rare: {
+    93→    circle:
+    94→      "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    95→    ring: "ring-emerald-500/30",
+    96→    label: "Rare",
+    97→    text: "text-emerald-600 dark:text-emerald-300",
+    98→  },
+    99→  epic: {
+   100→    circle:
+   101→      "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300",
+   102→    ring: "ring-amber-500/30",
+   103→    label: "Epic",
+   104→    text: "text-amber-600 dark:text-amber-300",
+   105→  },
+   106→  legendary: {
+   107→    circle: "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300",
+   108→    ring: "ring-rose-500/30",
+   109→    label: "Legendary",
+   110→    text: "text-rose-600 dark:text-rose-300",
+   111→  },
+   112→};
+   113→
+   114→const TIER_STYLE: Record<
+   115→  MedalDto["tier"],
+   116→  { ring: string; text: string; label: string; chip: string }
+   117→> = {
+   118→  silver: {
+   119→    ring: "ring-zinc-400/60",
+   120→    text: "text-zinc-600 dark:text-zinc-300",
+   121→    label: "Silver",
+   122→    chip:
+   123→      "bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300 ring-zinc-400/30",
+   124→  },
+   125→  gold: {
+   126→    ring: "ring-amber-500/60",
+   127→    text: "text-amber-700 dark:text-amber-300",
+   128→    label: "Gold",
+   129→    chip:
+   130→      "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 ring-amber-500/30",
+   131→  },
+   132→  platinum: {
+   133→    ring: "ring-cyan-400/60",
+   134→    text: "text-cyan-700 dark:text-cyan-300",
+   135→    label: "Platinum",
+   136→    chip:
+   137→      "bg-cyan-100 text-cyan-800 dark:bg-cyan-500/15 dark:text-cyan-300 ring-cyan-400/30",
+   138→  },
+   139→};
+   140→
+   141→function humanizeRule(rule: string) {
+   142→  if (!rule) return "";
+   143→  if (rule.startsWith("lesson:")) return "Complete a specific lesson";
+   144→  if (rule.startsWith("course_start:")) return "Begin a specific course";
+   145→  if (rule.startsWith("course_done:")) return "Complete a specific course";
+   146→  if (rule.startsWith("track_done:")) return "Complete an entire track";
+   147→  if (rule.startsWith("book_3:")) return "Study 3 units from a specific book";
+   148→  if (rule === "first_lesson") return "Complete your first lesson";
+   149→  if (rule === "streak_7") return "Reach a 7-day streak";
+   150→  if (rule === "streak_30") return "Maintain a 30-day streak";
+   151→  if (rule === "identify_daif") return "Correctly identify a weak narration";
+   152→  if (rule === "perfect_5") return "Score 100% on 5 exercises";
+   153→  if (rule === "weekly_xp_500") return "Earn 500 XP in a single week";
+   154→  return rule.split("_").join(" ");
+   155→}
+   156→
+   157→function rolePill(role: string) {
+   158→  const r = (role ?? "").toLowerCase();
+   159→  if (r === "scholar") {
+   160→    return "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-500/15 dark:text-fuchsia-300 ring-fuchsia-500/30";
+   161→  }
+   162→  return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300 ring-emerald-500/30";
+   163→}
+   164→
+   165→// ------------------------------------------------------------------
+   166→// Activity heatmap (GitHub-style contribution graph, ~17 weeks)
+   167→// ------------------------------------------------------------------
+   168→function heatmapColor(xp: number) {
+   169→  if (xp <= 0) return "bg-muted";
+   170→  if (xp <= 20) return "bg-emerald-500/30";
+   171→  if (xp <= 40) return "bg-emerald-500/50";
+   172→  if (xp <= 60) return "bg-emerald-500/70";
+   173→  return "bg-emerald-500";
+   174→}
+   175→
+   176→interface DayCell {
+   177→  date: Date;
+   178→  key: string;
+   179→  xp: number;
+   180→}
+   181→
+   182→function ActivityHeatmap({ activity }: { activity: ActivityDay[] }) {
+   183→  const map = React.useMemo(() => {
+   184→    const m = new Map<string, ActivityDay>();
+   185→    for (const a of activity ?? []) m.set(a.dateKey, a);
+   186→    return m;
+   187→  }, [activity]);
+   188→
+   189→  const weeks: DayCell[][] = React.useMemo(() => {
+   190→    const today = new Date();
+   191→    today.setHours(0, 0, 0, 0);
+   192→    // Find Sunday of the current week (0 = Sun).
+   193→    const dayOfWeek = today.getDay();
+   194→    const lastSunday = new Date(today);
+   195→    lastSunday.setDate(today.getDate() - dayOfWeek);
+   196→    // Start 16 weeks before the last Sunday → 17 columns total.
+   197→    const start = new Date(lastSunday);
+   198→    start.setDate(lastSunday.getDate() - 7 * 16);
+   199→    const cols: DayCell[][] = [];
+   200→    for (let w = 0; w < 17; w++) {
+   201→      const col: DayCell[] = [];
+   202→      for (let d = 0; d < 7; d++) {
+   203→        const date = new Date(start);
+   204→        date.setDate(start.getDate() + w * 7 + d);
+   205→        const key = date.toISOString().slice(0, 10);
+   206→        col.push({ date, key, xp: map.get(key)?.xpGained ?? 0 });
+   207→      }
+   208→      cols.push(col);
+   209→    }
+   210→    return cols;
+   211→  }, ap]);
+   212→
+   213→  const monthLabel = (weekIndex: number) => {
+   214→    const first = weeks[weekIndex][0].date;
+   215→    if (weekIndex === 0) {
+   216→      return first.toLocaleString("en-US", { month: "short" });
+   217→    }
+   218→    const prev = weeks[weekIndex - 1][0].date;
+   219→    if (first.getMonth() !== prev.getMonth()) {
+   220→      return first.toLocaleString("en-US", { month: "short" });
+   221→    }
+   222→    return "";
+   223→  };
+   224→
+   225→  const dayLabels = ["Mon", "Wed", "Fri"];
+   226→
+   227→  return (
+   228→    <div className="space-y-2">
+   229→      <div className="overflow-x-auto ilm-scroll pb-1">
+   230→        <div className="inline-flex flex-col gap-1.5">
+   231→          {/* Month labels row */}
+   232→          <div className="flex gap-1 pl-7 text-[10px] font-medium text-muted-foreground">
+   233→            {weeks.map((_, w) => (
+   234→              <div
+   235→                key={w}
+   236→                className="text-left"
+   237→                style={{ width: 12, minWidth: 12 }}
+   238→              >
+   239→                {monthLabel(w)}
+   240→              </div>
+   241→            ))}
+   242→          </div>
+   243→          {/* Grid + day labels */}
+   244→          <div className="flex gap-1">
+   245→            <div className="flex w-6 flex-col justify-between py-0 text-[9px] leading-3 text-muted-foreground">
+   246→              {dayLabels.map((d) => (
+   247→                <span key={d}>{d}</span>
+   248→              ))}
+   249→            </div>
+   250→            <div className="flex gap-1">
+   251→              {weeks.map((col, w) => (
+   252→                <div key={w} className="flex flex-col gap-1">
+   253→                  {col.map((cell) => (
+   254→                    <Tooltip key={cell.key}>
+   255→                      <TooltipTrigger asChild>
+   256→                        <div
+   257→                          className={cn(
+   258→                            "size-3 rounded-[3px] transition-colors",
+   259→                            heatmapColor(cell.xp)
+   260→                          )}
+   261→                          aria-label={`${cell.key}: ${cell.xp} XP`}
+   262→                        />
+   263→                      </TooltipTrigger>
+   264→                      <TooltipContent>
+   265→                        <div className="font-semibold">
+   266→                          {cell.date.toLocaleDateString("en-US", {
+   267→                            weekday: "short",
+   268→                            month: "short",
+   269→                            day: "numeric",
+   270→                          })}
+   271→                        </div>
+   272→                        <div className="opacity-80">{cell.xp} XP earned</div>
+   273→                      </TooltipContent>
+   274→                    </Tooltip>
+   275→                  ))}
+   276→                </div>
+   277→              ))}
+   278→            </div>
+   279→          </div>
+   280→        </div>
+   281→      </div>
+   282→      {/* Legend */}
+   283→      <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+   284→        <span>Less</span>
+   285→        <span className="size-3 rounded-[3px] bg-muted" />
+   286→        <span className="size-3 rounded-[3px] bg-emerald-500/30" />
+   287→        <span className="size-3 rounded-[3px] bg-emerald-500/50" />
+   288→        <span className="size-3 rounded-[3px] bg-emerald-500/70" />
+   289→        <span className="size-3 rounded-[3px] bg-emerald-500" />
+   290→        <span>More</span>
+   291→      </div>
+   292→    </div>
+   293→  );
+   294→}
+   295→
+   296→// ------------------------------------------------------------------
+   297→// Badge & medal cards
+   298→// ------------------------------------------------------------------
+   299→function BadgeTile({ badge }: { badge: BadgeDto }) {
+   300→  const r = RARITY_STYLE[badge.rarity];
+   301→  return (
+   302→    <Tooltip>
+   303→      <TooltipTrigger asChild>
+   304→        <div
+   305→          className={cn(
+   306→            "group relative flex flex-col items-center gap-2 rounded-xl border bg-card p-3 text-center transition-all",
+   307→            badge.earned
+   308→              ? "hover:shadow-md hover:-translate-y-0.5"
+   309→              : "opacity-60"
+   310→          )}
+   311→        >
+   312→          <div
+   313→            className={cn(
+   314→              "relative flex size-12 items-center justify-center rounded-full ring-2 ring-inset",
+   315→              badge.earned ? cn(r.circle, r.ring) : "bg-muted text-muted-foreground grayscale"
+   316→            )}
+   317→          >
+   318→            <IlmIcon name={badge.icon} size={22} />
+   319→            {!badge.earned && (
+   320→              <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-background ring-1 ring-border">
+   321→                <Lock className="size-3 text-muted-foreground" />
+   322→              </span>
+   323→            )}
+   324→          </div>
+   325→          <div className="min-w-0 w-full">
+   326→            <div className="truncate text-xs font-bold">{badge.name}</div>
+   327→            <div
+   328→              className={cn(
+   329→                "text-[9px] font-semibold uppercase tracking-wide",
+   330→                badge.earned ? r.text : "text-muted-foreground"
+   331→              )}
+   332→            >
+   333→              {badge.earned ? r.label : "Locked"}
+   334→            </div>
+   335→          </div>
+   336→        </div>
+   337→      </TooltipTrigger>
+   338→      <TooltipContent className="max-w-[220px]">
+   339→        <div className="font-semibold">{badge.name}</div>
+   340→        <div className="opacity-90">{badge.description}</div>
+   341→        <div className="mt-1 text-[10px] uppercase tracking-wide opacity-70">
+   342→          {humanizeRule(badge.criteriaRule)}
+   343→        </div>
+   344→        {badge.earned && badge.earnedAt && (
+   345→          <div className="mt-0.5 text-[10px] opacity-70">
+   346→            Earned {fmtDate(badge.earnedAt)}
+   347→          </div>
+   348→        )}
+   349→      </TooltipContent>
+   350→    </Tooltip>
+   351→  );
+   352→}
+   353→
+   354→function MedalTile({ medal }: { medal: MedalDto }) {
+   355→  const t = TIER_STYLEedal.tier];
+   356→  return (
+   357→    <Tooltip>
+   358→      <TooltipTrigger asChild>
+   359→        <div
+   360→          className={cn(
+   361→            "group relative flex items-center gap-3 rounded-xl border bg-card p-3 transition-all",
+   362→            medal.earned ? "hover:shadow-md hover:-translate-y-0.5" : "opacity-55"
+   363→          )}
+   364→        >
+   365→          <div
+   366→            className={cn(
+   367→              "flex size-12 shrink-0 items-center justify-center rounded-full ring-2 ring-inset",
+   368→              medal.earned
+   369→                ? cn("bg-card", t.ring, t.text)
+   370→                : "bg-muted text-muted-foreground grayscale ring-transparent"
+   371→            )}
+   372→          >
+   373→            <IlmIcon name={medal.icon} size={22} />
+   374→          </div>
+   375→          <div className="min-w-0 flex-1">
+   376→            <div className="truncate text-sm font-bold">{medal.name}</div>
+   377→            <div
+   378→              className={cn(
+   379→                "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset",
+   380→                medal.earned ? t.chip : "bg-muted text-muted-foreground ring-border"
+   381→              )}
+   382→            >
+   383→              <MedalIcon className="size-2.5" />
+   384→              {medal.earned ? t.label : "Locked"}
+   385→            </div>
+   386→          </div>
+   387→        </div>
+   388→      </TooltipTrigger>
+   389→      <TooltipContent className="max-w-[240px]">
+   390→        <div className="font-semibold">{medal.name}</div>
+   391→        <div className="opacity-90">{medal.description}</div>
+   392→        <div className="mt-1 text-[10px] uppercase tracking-wide opacity-70">
+   393→          {humanizeRule(medal.criteriaRule)}
+   394→        </div>
+   395→        {medal.earned && medal.earnedAt && (
+   396→          <div className="mt-0.5 text-[10px] opacity-70">
+   397→            Awarded {fmtDate(medal.earnedAt)}
+   398→          </div>
+   399→        )}
+   400→      </TooltipContent>
+   401→    </Tooltip>
+   402→  );
+   403→}
+   404→
+   405→// ------------------------------------------------------------------
+   406→// Settings (privacy + daily goal)
+   407→// ------------------------------------------------------------------
+   408→function SettingRow({
+   409→  icon,
+   410→  title,
+   411→  description,
+   412→  checked,
+   413→  onToggle,
+   414→  field,
+   415→}: {
+   416→  icon: React.ReactNode;
+   417→  title: string;
+   418→  description: string;
+   419→  checked: boolean;
+   420→  onToggle: (next: boolean) => void;
+   421→  field: "publicProfile" | "leaderboardOptIn";
+   422→}) {
+   423→  const [pending, setPending] = React.useState(false);
+   424→
+   425→  async function handle(next: boolean) {
+   426→    setPending(true);
+   427→    try {
+   428→      await apiFetch("/api/profile/settings", {
+   429→        method: "PATCH",
+   430→        body: JSON.stringify({ [field]: next }),
+   431→      });
+   432→      useStore.getState().bumpRefresh();
+   433→      toast.success(`${title} ${next ? "enabled" : "disabled"}.`);
+   434→      onToggle(next);
+   435→    } catch (e) {
+   436→      toast.error(e instanceof Error ? e.message : "Update failed");
+   437→    } finally {
+   438→      setPending(false);
+   439→    }
+   440→  }
+   441→
+   442→  return (
+   443→    <div className="flex items-start justify-between gap-4 py-3">
+   444→      <div className="flex items-start gap-3">
+   445→        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+   446→          {icon}
+   447→        </div>
+   448→        <div>
+   449→          <div className="text-sm font-semibold">{title}</div>
+   450→          <div className="text-xs text-muted-foreground">{description}</div>
+   451→        </div>
+   452→      </div>
+   453→      <Switch
+   454→        checked={checked}
+   455→        disabled={pending}
+   456→        onCheckedChange={handle}
+   457→        aria-label={title}
+   458→      />
+   459→    </div>
+   460→  );
+   461→}
+   462→
+   463→function DailyGoalSelect({ value }: { value: number }) {
+   464→  const [pending, setPending] = React.useState(false);
+   465→  const [current, setCurrent] = React.useState(value);
+   466→
+   467→  React.useEffect(() => setCurrent(value), [value]);
+   468→
+   469→  async function patch(next: number) {
+   470→    setPending(true);
+   471→    try {
+   472→      await apiFetch("/api/profile/settings", {
+   473→        method: "PATCH",
+   474→        body: JSON.stringify({ dailyGoalXp: next }),
+   475→      });
+   476→      useStore.getState().bumpRefresh();
+   477→      setCurrent(next);
+   478→      toast.success(`Daily goal set to ${next} XP.`);
+   479→    } catch (e) {
+   480→      toast.error(e instanceof Error ? e.message : "Update failed");
+   481→    } finally {
+   482→      setPending(false);
+   483→    }
+   484→  }
+   485→
+   486→  return (
+   487→    <div className="flex items-center justify-between gap-4 py-3">
+   488→      <div className="flex items-start gap-3">
+   489→        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+   490→          <Target className="size-4" />
+   491→        </div>
+   492→        <div>
+   493→          <div className="text-sm font-semibold">Daily XP goal</div>
+   494→          <div className="text-xs text-muted-foreground">
+   495→            Choose a manageable daily target to build a steady streak.
+   496→          </div>
+   497→        </div>
+   498→      </div>
+   499→      <Select
+   500→        value={String(current)}
+   501→        disabled={pending}
+   502→        onValueChange={(v) => patch(Number(v))}
+   503→      >
+   504→        <SelectTrigger className="w-24" aria-label="Daily XP goal">
+   505→          <SelectValue />
+   506→        </SelectTrigger>
+   507→        <SelectContent>
+   508→          <SelectItem value="25">25 XP</SelectItem>
+   509→          <SelectItem value="50">50 XP</SelectItem>
+   510→          <SelectItem value="100">100 XP</SelectItem>
+   511→        </SelectContent>
+   512→      </Select>
+   513→    </div>
+   514→  );
+   515→}
+   516→
+   517→// ------------------------------------------------------------------
+   518→// Stat chip
+   519→// ------------------------------------------------------------------
+   520→function StatChip({
+   521→  icon,
+   522→  value,
+   523→  label,
+   524→  tone = "default",
+   525→}: {
+   526→  icon: React.ReactNode;
+   527→  value: React.ReactNode;
+   528→  label: string;
+   529→  tone?: "default" | "flame" | "gold";
+   530→}) {
+   531→  const toneCls =
+   532→    tone === "flame"
+   533→      ? "text-orange-600 dark:text-orange-400"
+   534→      : tone === "gold"
+   535→      ? "text-amber-600 dark:text-amber-400"
+   536→      : "text-primary";
+   537→  return (
+   538→    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+   539→      <span className={toneCls}>{icon}</span>
+   540→      <div className="leading-tight">
+   541→        <div className="text-sm font-bold">{value}</div>
+   542→        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+   543→          {label}
+   544→        </div>
+   545→      </div>
+   546→    </div>
+   547→  );
+   548→}
+   549→
+   550→// ------------------------------------------------------------------
+   551→// ProfileView
+   552→// ------------------------------------------------------------------
+   553→export function ProfileView() {
+   554→  const { data, loading, error } = useApi<{ profile: ProfileDto }>("/api/me");
+   555→  const profile = data?.profile;
+   556→  const [tab, setTab] = React.useState("overview");
+   557→
+   558→  if (loading) {
+   559→    return (
+   560→      <div className="space-y-4">
+   561→        <Skeleton className="h-40 w-full rounded-xl" />
+   562→        <Skeleton className="h-64 w-full rounded-xl" />
+   563→      </div>
+   564→    );
+   565→  }
+   566→
+   567→  if (error || !profile) {
+   568→    return (
+   569→      <Card className="p-4 text-sm text-destructive">
+   570→        Failed to load profile: {error ?? "no profile"}
+   571→      </Card>
+   572→    );
+   573→  }
+   574→
+   575→  const earnedBadges = profile.badges.filter((b) => b.earned);
+   576→  const lockedBadges = profile.badges.filter((b) => !b.earned);
+   577→  const earnedMedals = profile.medals.filter((m) => m.earned);
+   578→  const lockedMedals = profile.medals.filter((m) => !m.earned);
+   579→
+   580→  return (
+   581→    <div className="space-y-6">
+   582→      <Tabs value={tab} onValueChange={setTab} className="w-full">
+   583→        <div className="overflow-x-auto ilm-scroll">
+   584→          <TabsList className="w-full min-w-max sm:w-auto">
+   585→            <TabsTrigger value="overview">Overview</TabsTrigger>
+   586→            <TabsTrigger value="badges">
+   587→              Badges & Medals
+   588→              <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
+   589→                {profile.totalBadges + profile.totalMedals}
+   590→              </span>
+   591→            </TabsTrigger>
+   592→            <TabsTrigger value="bookmarks">
+   593→              Bookmarks
+   594→              {profile.bookmarks.length > 0 && (
+   595→                <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] font-bold">
+   596→                  {profile.bookmarks.length}
+   597→                </span>
+   598→              )}
+   599→            </TabsTrigger>
+   600→            <TabsTrigger value="settings">Settings</TabsTrigger>
+   601→          </TabsList>
+   602→        </div>
+   603→
+   604→        {/* ---------- OVERVIEW ---------- */}
+   605→        <TabsContent value="overview" className="space-y-6">
+   606→          {/* Profile header */}
+   607→          <motion.div
+   608→            initial={{ opacity: 0, y: 12 }}
+   609→            animate={{ opacity: 1, y: 0 }}
+   610→            transition={{ duration: 0.35 }}
+   611→          >
+   612→            <Card className="relative overflow-hidden p-0">
+   613→              <div className="ilm-pattern absolute inset-0 opacity-60" aria-hidden />
+   614→              <div className="relative flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
+   615→                <div className="flex items-center gap-4">
+   616→                  <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-amber-500 text-xl font-extrabold text-white shadow-md ring-2 ring-background">
+   617→                    {initials(profile.displayName)}
+   618→                  </div>
+   619→                  <div>
+   620→                    <h2 className="text-xl font-extrabold tracking-tight md:text-2xl">
+   621→                      {profile.displayName}
+   622→                    </h2>
+   623→                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+   624→                      <span
+   625→                        className={cn(
+   626→                          "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset",
+   627→                          rolePill(profile.role)
+   628→                        )}
+   629→                      >
+   630→                        <ShieldCheck className="size-3" />
+   631→                        {profile.role}
+   632→                      </span>
+   633→                      <span
+   634→                        className={cn(
+   635→                          "inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset",
+   636→                          profile.madhab?.toLowerCase() === "shia"
+   637→                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300 ring-emerald-500/30"
+   638→                            : "bg-zinc-200 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300 ring-zinc-400/30"
+   639→                        )}
+   640→                      >
+   641→                        {profile.madhab || "shared"}
+   642→                      </span>
+   643→                    </div>
+   644→                  </div>
+   645→                </div>
+   646→
+   647→                {/* Level + XP */}
+   648→                <div className="flex items-center gap-4">
+   649→                  <div className="flex flex-col items-center">
+   650→                    <LevelRing levelInfo={profile.levelInfo} size={80} />
+   651→                    <div className="mt-1 text-center">
+   652→                      <div className="text-[10px] font-bold uppercase tracking-wide text-primary">
+   653→                        {profile.levelInfo.title}
+   654→                      </div>
+   655→                      <div className="arabic text-xs text-muted-foreground">
+   656→                        {profile.levelInfo.titleArabic}
+   657→                      </div>
+   658→                    </div>
+   659→                  </div>
+   660→                  <div className="min-w-[180px] flex-1">
+   661→                    <XpBar levelInfo={profile.levelInfo} xp={profile.xp} />
+   662→                    <div className="mt-2 text-xs text-muted-foreground">
+   663→                      <span className="font-bold text-foreground">{profile.xp}</span>{" "}
+   664→                      total XP
+   665→                    </div>
+   666→                  </div>
+   667→                </div>
+   668→              </div>
+   669→
+   670→              {/* Stat chips */}
+   671→              <div className="relative grid grid-cols-2 gap-2 border-t bg-card/40 p-4 md:grid-cols-3 lg:grid-cols-6">
+   672→                <StatChip
+   673→                  icon={<Sparkles className="size-4" />}
+   674→                  value={profile.xp}
+   675→                  label="Total XP"
+   676→                />
+   677→                <StatChip
+   678→                  icon={<Flame className="size-4" />}
+   679→                  value={profile.streakCount}
+   680→                  label="Day streak"
+   681→                  tone="flame"
+   682→                />
+   683→                <StatChip
+   684→                  icon={<Trophy className="size-4" />}
+   685→                  value={profile.longestStreak}
+   686→                  label="Longest streak"
+   687→                  tone="gold"
+   688→                />
+   689→                <StatChip
+   690→                  icon={<MedalIcon className="size-4" />}
+   691→                  value={profile.totalBadges}
+   692→                  label="Badges"
+   693→                />
+   694→                <StatChip
+   695→                  icon={<Trophy className="size-4" />}
+   696→                  value={profile.totalMedals}
+   697→                  label="Medals"
+   698→                  tone="gold"
+   699→                />
+   700→                <StatChip
+   701→                  icon={<BookCheck className="size-4" />}
+   702→                  value={`${profile.completedLessons}/${profile.totalLessonsAvailable}`}
+   703→                  label="Lessons"
+   704→                />
+   705→              </div>
+   706→            </Card>
+   707→          </motion.div>
+   708→
+   709→          {/* Activity heatmap */}
+   710→          <Card className="p-5">
+   711→            <div className="mb-3 flex items-center justify-between">
+   712→              <div>
+   713→                <h3 className="text-base font-bold">Activity</h3>
+   714→                <p className="text-xs text-muted-foreground">
+   715→                  Last 17 weeks of study. Hover any day for details.
+   716→                </p>
+   717→              </div>
+   718→              <div className="flex items-center gap-2 text-xs">
+   719→                <span className="rounded-full bg-primary/10 px-2 py-0.5 font-bold text-primary">
+   720→                  {profile.todayXp} XP today
+   721→                </span>
+   722→                <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+   723→                  Goal: {profile.dailyGoalXp} XP/day
+   724→                </span>
+   725→              </div>
+   726→            </div>
+   727→            <ActivityHeatmap activity={profile.activity} />
+   728→          </Card>
+   729→        </TabsContent>
+   730→
+   731→        {/* ---------- BADGES & MEDALS ---------- */}
+   732→        <TabsContent value="badges" className="space-y-6">
+   733→          {/* Badges */}
+   734→          <Card className="p-5">
+   735→            <div className="mb-3 flex items-center justify-between">
+   736→              <div>
+   737→                <h3 className="text-base font-bold">Badge case</h3>
+   738→                <p className="text-xs text-muted-foreground">
+   739→                  Rule-based achievements earned across the platform.
+   740→                </p>
+   741→              </div>
+   742→              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
+   743→                {earnedBadges.length}/{profile.badges.length} earned
+   744→              </span>
+   745→            </div>
+   746→            {profile.badges.length === 0 ? (
+   747→              <div className="py-6 text-center text-sm text-muted-foreground">
+   748→                No badges defined yet.
+   749→              </div>
+   750→            ) : (
+   751→              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+   752→                {[...earnedBadges, ...lockedBadges].map((b) => (
+   753→                  <BadgeTile key={b.id} badge={b} />
+   754→                ))}
+   755→              </div>
+   756→            )}
+   757→          </Card>
+   758→
+   759→          {/* Medals */}
+   760→          <Card className="p-5">
+   761→            <div className="mb-3 flex items-center justify-between">
+   762→              <div>
+   763→                <h3 className="text-base font-bold">Medal case</h3>
+   764→                <p className="text-xs text-muted-foreground">
+   765→                  Tiered honours for major milestones (silver / gold / platinum).
+   766→                </p>
+   767→              </div>
+   768→              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
+   769→                {earnedMedals.length}/{profile.medals.length} earned
+   770→              </span>
+   771→            </div>
+   772→            {profile.medals.length === 0 ? (
+   773→              <div className="py-6 text-center text-sm text-muted-foreground">
+   774→                No medals defined yet.
+   775→              </div>
+   776→            ) : (
+   777→              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+   778→                {[...earnedMedals, ...lockedMedals].map((m) => (
+   779→                  <MedalTile key={m.id} medal={m} />
+   780→                ))}
+   781→              </div>
+   782→            )}
+   783→          </Card>
+   784→        </TabsContent>
+   785→
+   786→        {/* ---------- BOOKMARKS ---------- */}
+   787→        <TabsContent value="bookmarks">
+   788→          <Card className="p-5">
+   789→            <div className="mb-3 flex items-center justify-between">
+   790→              <div>
+   791→                <h3 className="text-base font-bold">Bookmarks</h3>
+   792→                <p className="text-xs text-muted-foreground">
+   793→                  Saved text units & lesson passages for later review.
+   794→                </p>
+   795→              </div>
+   796→              <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold">
+   797→                {profile.bookmarks.length}
+   798→              </span>
+   799→            </div>
+   800→            {profile.bookmarks.length === 0 ? (
+   801→              <div className="py-10 text-center text-sm text-muted-foreground">
+   802→                <Bookmark className="mx-auto mb-2 size-8 opacity-40" />
+   803→                No bookmarks yet. Save passages from lessons to find them here.
+   804→              </div>
+   805→            ) : (
+   806→              <ul className="max-h-96 space-y-2 overflow-y-auto ilm-scroll pr-1">
+   807→                {profile.bookmarks.map((bm) => (
+   808→                  <li
+   809→                    key={bm.id}
+   810→                    className="flex items-start gap-3 rounded-lg border bg-card p-3"
+   811→                  >
+   812→                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   813→                      <Bookmark className="size-4" />
+   814→                    </div>
+   815→                    <div className="min-w-0 flex-1">
+   816→                      <div className="text-sm font-semibold">
+   817→                        {bm.lessonTitle ?? "Lesson"}
+   818→                      </div>
+   819→                      {bm.textUnitLocator && (
+   820→                        <div className="text-xs text-muted-foreground">
+   821→                          {bm.textUnitLocator}
+   822→                        </div>
+   823→                      )}
+   824→                      {bm.note && (
+   825→                        <div className="mt-1.5 text-sm italic text-foreground/80">
+   826→                          “{bm.note}”
+   827→                        </div>
+   828→                      )}
+   829→                    </div>
+   830→                  </li>
+   831→                ))}
+   832→              </ul>
+   833→            )}
+   834→          </Card>
+   835→        </TabsContent>
+   836→
+   837→        {/* ---------- SETTINGS ---------- */}
+   838→        <TabsContent value="settings" className="space-y-6">
+   839→          <Card className="p-5">
+   840→            <div className="mb-2 flex items-center gap-2">
+   841→              <Eye className="size-4 text-primary" />
+   842→              <h3 className="text-base font-bold">Privacy & visibility</h3>
+   843→            </div>
+   844→            <p className="mb-2 text-xs text-muted-foreground">
+   845→              Leaderboard participation is opt-in and off by default. We respect
+   846→              learners who prefer private study.
+   847→            </p>
+   848→            <div className="divide-y">
+   849→              <SettingRow
+   850→                icon={<Eye className="size-4" />}
+   851→                title="Public profile"
+   852→                description="Allow other learners to view your profile page and progress."
+   853→                checked={profile.publicProfile}
+   854→                onToggle={() => {}}
+   855→                field="publicProfile"
+   856→              />
+   857→              <SettingRow
+   858→                icon={<Trophy className="size-4" />}
+   859→                title="Appear on leaderboard"
+   860→                description="Show your display name, XP and streak on the public leaderboard."
+   861→                checked={profile.leaderboardOptIn}
+   862→                onToggle={() => {}}
+   863→                field="leaderboardOptIn"
+   864→              />
+   865→              <DailyGoalSelect value={profile.dailyGoalXp} />
+   866→            </div>
+   867→          </Card>
+   868→
+   869→          <Card className="p-5">
+   870→            <div className="mb-2 flex items-center gap-2">
+   871→              <ShieldCheck className="size-4 text-primary" />
+   872→              <h3 className="text-base font-bold">Account</h3>
+   873→            </div>
+   874→            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+   875→              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
+   876→                <span className="text-muted-foreground">Language</span>
+   877→                <span className="font-semibold">{profile.language || "en"}</span>
+   878→              </div>
+   879→              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
+   880→                <span className="text-muted-foreground">Madhab</span>
+   881→                <span className="font-semibold capitalize">{profile.madhab}</span>
+   882→              </div>
+   883→              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
+   884→                <span className="text-muted-foreground">Streak freezes left</span>
+   885→                <span className="font-semibold">{profile.streakFreezeCount}</span>
+   886→              </div>
+   887→              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
+   888→                <span className="text-muted-foreground">Role</span>
+   889→                <span className="font-semibold capitalize">{profile.role}</span>
+   890→              </div>
+   891→            </div>
+   892→            <p className="mt-3 text-[11px] text-muted-foreground">
+   893→              Certificates recognise course completion only and are{" "}
+   894→              <span className="font-semibold">not ijāzah</span>; they confer no
+   895→              scholarly authority.
+   896→            </p>
+   897→          </Card>
+   898→        </TabsContent>
+   899→      </Tabs>
+   900→    </div>
+   901→  );
+   902→}
+   903→

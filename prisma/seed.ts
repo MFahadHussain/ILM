@@ -98,6 +98,7 @@ async function main() {
   // =====================================================================
   // TEXT UNITS — real content, honest grading
   // =====================================================================
+  const exPayload = (o: object) => JSON.stringify(o);
   const mk = async (data: Parameters<typeof db.textUnit.create>[0]["data"]) =>
     db.textUnit.create({ data });
 
@@ -306,6 +307,72 @@ async function main() {
   });
 
   // =====================================================================
+  // SUNNI SECONDARY TRACK — clearly labelled, never merged into Shia tracks
+  // =====================================================================
+  const bookBUKHARI = await db.book.create({
+    data: {
+      title: "Sahih al-Bukhari",
+      titleArabic: "صحيح البخاري",
+      author: "Imam Muhammad ibn Isma'il al-Bukhari (d. 256 AH)",
+      language: "ar",
+      madhabScope: "sunni",
+      category: "hadith",
+      description:
+        "The most authoritative hadith collection in the Sunni tradition, compiled by Imam al-Bukhari. Contains ~7,563 narrations (with repetitions). ILM presents this in the clearly-separated Sunni secondary track.",
+    },
+  });
+  const tuBukhariIlm = await mk({
+    bookId: bookBUKHARI.id,
+    locator: "Sahih al-Bukhari 1:30, Kitab al-Ilm, Bab Man Yurid Allah bihi Khayran Yufaqqihhu fi al-Din",
+    volume: "1", chapter: "Kitab al-Ilm",
+    pageOrHadithNumber: "H.71",
+    arabicText: "مَنْ يُرِدِ اللَّهُ بِهِ خَيْرًا يُفَقِّهْهُ فِي الدِّينِ.",
+    translationText:
+      "Whomever Allah intends good for, He grants him understanding of the religion.",
+    transliteration: "Man yuridi-llāhu bihi khayran yufaqqihhu fī ad-dīn.",
+    chainOfNarration: "Al-Bukhari ← Mu'adh ibn Fadala ← Hisham ← Ibn Abi Dhi'b ← Yahya ibn Abi Kathir ← Abu Salama ← Abu Hurayra",
+    authenticityGrade: "Authentic",
+    gradeReference: "Sahih al-Bukhari, Kitab al-Ilm, H.71; graded Sahih by Imam al-Bukhari himself; among the most rigorously authenticated Sunni hadith.",
+    topicTags: T(["Knowledge"]),
+    isReviewed: true, status: "published",
+    reviewedAt: new Date("2024-10-01"),
+  });
+  const trackSunni = await db.track.create({
+    data: {
+      title: "Sunni Hadith Foundations",
+      madhabScope: "sunni",
+      description: "A secondary track covering the Sunni hadith canon (Sahih al-Bukhari, Sahih Muslim). Clearly labelled and never merged with Shia content.",
+      icon: "BookOpen", color: "teal", order: 4,
+    },
+  });
+  const courseBukhariIlm = await db.course.create({
+    data: {
+      trackId: trackSunni.id, title: "Sahih al-Bukhari: The Book of Knowledge",
+      description: "Selected narrations on the virtue of seeking knowledge from Imam al-Bukhari's Kitab al-Ilm.",
+      difficulty: "beginner", order: 1, estimatedHours: 2, coverColor: "teal",
+    },
+  });
+  const chSunni1 = await db.chapter.create({ data: { courseId: courseBukhariIlm.id, title: "The Virtue of Understanding", order: 1 } });
+  const lessonSunni1 = await db.lesson.create({
+    data: {
+      chapterId: chSunni1.id, title: "Allah Grants Understanding to Whom He Wills Good",
+      summary: "Sahih al-Bukhari's opening hadith on the virtue of fiqh (understanding).",
+      contentBody:
+        "Imam al-Bukhari opens his Sahih with the Book of Knowledge (Kitab al-Ilm). Its most celebrated hadith states that Allah grants understanding of the religion (yufaqqihhu fī ad-dīn) to those He intends good for.\n\nThis places understanding — not mere memorisation — as a divine gift and a sign of divine favour. The Sunni tradition treats this as a foundational motivation for the pursuit of ʿilm, parallel to the Shia emphasis found in Al-Kafi's Kitab al-'Aql wal-Jahl.",
+      estimatedMin: 8, order: 1,
+    },
+  });
+  await db.lessonTextUnit.create({ data: { lessonId: lessonSunni1.id, textUnitId: tuBukhariIlm.id, contextNote: "The opening hadith of Sahih al-Bukhari's Kitab al-Ilm." } });
+  await db.exercise.create({
+    data: {
+      lessonId: lessonSunni1.id, order: 1, type: "mcq", difficulty: "beginner", xpReward: 10,
+      prompt: "According to Sahih al-Bukhari, Allah grants understanding of the religion to:",
+      payload: exPayload({ options: ["Those who memorise the most", "Whomever He intends good for", "Only scholars", "Those who fast"], correctIndex: 1 }),
+      sourceTextUnitId: tuBukhariIlm.id, status: "published",
+    },
+  });
+
+  // =====================================================================
   // TRACKS / COURSES / CHAPTERS / LESSONS / EXERCISES
   // =====================================================================
   const trackFiqh = await db.track.create({
@@ -423,7 +490,6 @@ async function main() {
   await db.lessonTextUnit.create({ data: { lessonId: lessonIkh.id, textUnitId: tuMizanIkhlas.id, contextNote: "Allamah Tabatabai's commentary on Surah al-Ikhlas." } });
 
   // --- Exercises (linked to reviewed TextUnits as answer keys) ---
-  const exPayload = (o: object) => JSON.stringify(o);
   await db.exercise.create({
     data: {
       lessonId: lesson1.id, order: 1, type: "mcq", difficulty: "beginner", xpReward: 10,
@@ -511,6 +577,8 @@ async function main() {
           lastActivityDate: new Date().toISOString().slice(0, 10),
           dailyGoalXp: 50, publicProfile: true, leaderboardOptIn: true,
           language: "en",
+          onboarded: true, interests: "Fiqh,Aqeedah,Knowledge",
+          streakAlertsEnabled: true,
         },
       },
     },
@@ -618,9 +686,13 @@ async function main() {
   // a couple of bookmarks
   await db.bookmark.create({ data: { userId: student.id, textUnitId: tuAql.id, note: "First hadith of Al-Kafi — review isnad." } });
   await db.bookmark.create({ data: { userId: student.id, lessonId: lesson4.id, note: "Adab before volume." } });
+  await db.bookmark.create({ data: { userId: student.id, textUnitId: tuBukhariIlm.id, note: "Compare with Al-Kafi's hadith on knowledge." } });
+
+  // assign reviewed-by to the scholar (for the My Reviews audit trail)
+  await db.textUnit.updateMany({ where: { isReviewed: true, reviewedBy: null }, data: { reviewedBy: scholar.id } });
 
   // book stats
-  for (const b of [bookNHB, bookKF, bookMIZ, bookSF, bookBIHAR]) {
+  for (const b of [bookNHB, bookKF, bookMIZ, bookSF, bookBIHAR, bookBUKHARI]) {
     const total = await db.textUnit.count({ where: { bookId: b.id } });
     const reviewed = await db.textUnit.count({ where: { bookId: b.id, isReviewed: true } });
     await db.book.update({ where: { id: b.id }, data: { totalUnits: total, reviewedUnits: reviewed } });

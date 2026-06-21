@@ -18,6 +18,12 @@ interface IlmState {
   // a counter to trigger data refetches after mutations
   refreshKey: number;
   bumpRefresh: () => void;
+  // global search command palette
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
+  // the user's current madhab (populated from /api/me; drives filtering)
+  userMadhab: string;
+  setUserMadhab: (m: string) => void;
 }
 
 export const useStore = create<IlmState>((set) => ({
@@ -31,4 +37,8 @@ export const useStore = create<IlmState>((set) => ({
   setActiveCourseId: (id) => set({ activeCourseId: id }),
   refreshKey: 0,
   bumpRefresh: () => set((s) => ({ refreshKey: s.refreshKey + 1 })),
+  searchOpen: false,
+  setSearchOpen: (open) => set({ searchOpen: open }),
+  userMadhab: "shia",
+  setUserMadhab: (m) => set({ userMadhab: m }),
 }));

@@ -200,3 +200,154 @@ Work Log:
 
 Stage Summary:
 - ILM platform COMPLETE and browser-verified end-to-end. Lint clean. All 6 build-phase pillars demonstrated (Library Engine, Course structure, Learning player, Gamification, AI-assisted authoring, Scholar review gate).
+
+---
+Task ID: F4+F9
+Agent: full-stack-developer
+Task: Built SettingsView (spec §4) and OnboardingView (spec §9) client components — the final two stub views for the ILM platform.
+
+Work Log:
+- Read /home/z/my-project/worklog.md to align with prior agents' contracts (types.ts ProfileDto, store.ts setUserMadhab/bumpRefresh, use-api.ts useApi, api.ts apiFetch, design system emerald+gold, existing views' PATCH /api/profile/settings + bumpRefresh + toast pattern from profile-view.tsx).
+- Inspected the actual /api/profile/settings PATCH route to confirm field contract: publicProfile, leaderboardOptIn, dailyGoalXp, language, rtlOverride (string|null), madhab ("shia"|"sunni"), onboarded, interests (string[]), dailyReminderEnabled, dailyReminderTime (string|null), streakAlertsEnabled → returns { ok: true }. Confirmed madhab lives on User model and re-filters the whole app.
+- Confirmed AppShell gates OnboardingView when `profile && !profile.onboarded && role === "student"` — so finishing onboarding (PATCH { onboarded: true }) + bumpRefresh triggers the AppShell to re-render into the sidebar layout automatically.
+- Wrote src/components/views/settings-view.tsx ("use client", named export SettingsView):
+  * useApi<{ profile: ProfileDto }>("/api/me") for current state; loading → 6-card Skeleton; error → destructive Alert; missing profile → friendly Alert.
+  * usePatchSetting() hook: thin wrapper that calls apiFetch PATCH /api/profile/settings + bumpRefresh + toast.success + optional onOk callback. Throws on error so per-section handlers can show the right toast.
+  * SectionHeader (icon tile + title + description) reused across all 7 sections for visual consistency.
+  * ToggleRow: reusable switch row (icon, title, description, accent = muted/primary/amber) — drives the privacy/notifications/language-RTL sections.
+  * §1 Language & Script: Select (en/ar/ur/fa) with native-script preview, RTL auto-detect badge, RTL-override Switch (PATCH rtlOverride: "rtl" | null). Both changes PATCH immediately + toast.
+  * §2 Madhab Track: RadioGroup with two custom MadhabOption labels — Shia emerald accent, Sunni sky-blue accent, each with check-circle when selected. On change → PATCH { madhab } + setUserMadhab(madhab) + toast. Info Alert reiterates "Shia and Sunni content are never merged".
+  * §3 Privacy: publicProfile + leaderboardOptIn switches (each PATCHes immediately). Info Alert notes "opt-in and off by default" + "we respect learners who prefer private study".
+  * §4 Notifications: dailyReminderEnabled switch + framer-motion height-animated time Input (type=time) revealed when on (PATCH dailyReminderTime on blur). Streak-at-risk alert switch (streakAlertsEnabled). Each PATCH + toast.
+  * §5 Streak & Freeze (READ-ONLY): dashed Card with 3 stat tiles (freeze tokens / current streak / longest streak), each with tinted icon. Info Alert repeats the humane-freeze rule verbatim ("3 freeze tokens per month ... humane, not predatory ... we don't shame missed days").
+  * §6 Appearance: useTheme from next-themes. Two-button grid (Light / Dark) — mounted guard to avoid hydration mismatch. Note: "Choose your preferred theme. This is stored locally."
+  * §7 Onboarding (footer): AlertDialog confirmation → PATCH { onboarded: false } + bumpRefresh → AppShell re-renders into the OnboardingView gate. Loader2 spinner while pending.
+- Wrote src/components/views/onboarding-view.tsx ("use client", named export OnboardingView):
+  * Full-screen OnboardingShell — NO sidebar, NO topbar. ilm-pattern background + radial emerald/gold tint. Centered max-w-lg container, vertically centered. Brand header (Sparkles + ILM gradient text).
+  * Progress: thin gradient bar (emerald→gold) animating width via framer-motion + 4 dot indicators (current = wider emerald pill, completed = dim emerald, pending = muted).
+  * Step content wrapped in <Step> with AnimatePresence mode="wait" — slide-x + fade transition (24px enter from right, exit to left).
+  * Step 1 Welcome: spring-animated gradient circle with Sparkles, "Welcome to ILM" gradient heading, intro paragraph mentioning "source-of-truth library" + "every text you study is traceable to a reviewed primary source", 3 Feature chips (Sourced / Structured / Humane), "Let's take 30 seconds" CTA.
+  * Step 2 Madhab track: two large MadhabCard buttons (Shia emerald / Sunni sky), each with accent tile, tagline, description, animated check-circle on select. Default = shia. Info Alert about re-filtering.
+  * Step 3 Language: 2-col grid of language option buttons (en/ar/ur/fa) — each shows Globe icon, English label, native script (Arabic font), RTL/LTR auto-detect hint. Selected = primary ring + tint. Note about RTL override in Settings.
+  * Step 4 Interests: 2-col toggle grid of 8 chips (Fiqh, Aqeedah, History, Akhlaq, Tafsir, Arabic-for-Quran, Hadith Science, Supplication) — each with a check-square toggle. "Clear" button when any selected. Counter shows selection count.
+  * Nav row: Back (ghost) when step > 0 | Skip (link, muted) + Continue (default) when step < last | Finish (default with Sparkles) on last step. Loader2 spinner on Finish during PATCH.
+  * finish() helper: PATCH /api/profile/settings with { madhab, language, interests, onboarded: true } all at once → setUserMadhab(madhab) + bumpRefresh() + setView("dashboard") + toast.success "Welcome to ILM!".
+  * Skip button: same finish() with defaults (madhab="shia", language="en", interests=[]).
+  * Already-onboarded branch: friendly Card with green check-circle + "You're already onboarded" + "Go to dashboard" button (setView("dashboard")).
+  * Loading state: spinner in shell. Error state: destructive Alert in shell.
+- Verified imports resolve: bunx tsc --noEmit reports zero errors in either new file (only pre-existing errors in .next/dev/types/validator.ts, examples/websocket, skills/). bunx eslint on both files: clean, zero warnings.
+- Dev log confirms: app compiles cleanly after both files replaced (prior "module-not-found" was for the old stubs); GET / 200, GET /api/me 200.
+- Did not modify any file other than the two requested view stubs.
+
+Stage Summary:
+- Two final stub views delivered, type-clean + lint-clean, fully wired to existing store/api/hooks/design system.
+- SettingsView: 7 sections covering language/RTL, madhab track, privacy, notifications, streak-freeze read-only overview, dark-mode appearance, and restart-onboarding — all PATCH immediately with toast + bumpRefresh; madhab changes also call setUserMadhab; restart onboarding confirmed via AlertDialog.
+- OnboardingView: full-screen 4-step wizard (Welcome → Madhab → Language → Interests) with framer-motion step transitions, progress bar + dots, AnimatePresence, Skip link with defaults, and a single combined PATCH on Finish that flips onboarded=true so the AppShell gate re-routes into the dashboard automatically. Gracefully handles already-onboarded, loading, and error states.
+- ILM platform now feature-complete on the client side: every view (dashboard, library, tracks, learn, profile, achievements, notes, settings, leaderboard, review, authoring, my-reviews, onboarding) has a real implementation wired to its API.
+
+---
+Task ID: F2+F3
+Agent: full-stack-developer
+Task: Built AchievementsView (badge & medal showcase, spec §2) and NotesView (notes & bookmarks grouped by source book, spec §3) client view components.
+
+Work Log:
+- Read /home/z/my-project/worklog.md and inspected shared infra: types.ts (BadgeDto/MedalDto/NoteDto/BookmarkDto/ProfileDto), store.ts (view/setView/openLesson/bumpRefresh/role), use-api.ts (refresh on refreshKey/role), api.ts (apiFetch with x-ilm-user header), IlmIcon component, ArabicText/GradeBadge, shadcn new-york primitives (Card/Tabs/Progress/Tooltip/AlertDialog/Skeleton/Alert/Separator/Textarea/Badge/Button), and the relevant API routes (/api/me, /api/notes, /api/notes/[id], /api/bookmarks, /api/bookmarks/[id]).
+- Cross-referenced seed data (prisma/seed.ts) to confirm actual criteriaRule values (first_lesson, streak_7, lesson:<id>, identify_daif, course_start:<id>, perfect_5, book_3:nhb, course_done:<id>, track_done:<id>, weekly_xp_500, streak_30) so the humanizeRule helper covers every real rule plus graceful fallback.
+- Created src/components/views/achievements-view.tsx ("use client", named export AchievementsView):
+  * Fetches useApi<{ profile: ProfileDto }>("/api/me") and reads profile.badges / profile.medals.
+  * Summary header Card (ilm-pattern overlay, gradient title) with "X / Y badges" + "Z / W medals" counts and two Progress bars (badges emerald via default primary, medals amber-tinted via indicator override).
+  * Filter Tabs (All / Earned / Locked) in a single control — drives both badge and medal sections simultaneously. Live count caption below.
+  * BadgeTile: circular icon tile (size-14 rounded-full ring-inset), rarity palette common→zinc, rare→emerald, epic→amber, legendary→rose; earned = full color + hover lift + glow shadow; locked = grayscale + opacity-50 + Lock badge overlay. Tooltip shows name + description + humanized criteriaRule (Info icon) + earnedAt date when earned. framer-motion stagger entrance (scale/opacity/y, capped delay).
+  * MedalTile: hexagonal shield styling via inline clip-path polygon on the icon container (distinct from round badges); tier palette silver→zinc, gold→amber, platinum→teal; tier chip with MedalIcon below name; same earned/locked logic + Tooltip with awarded date.
+  * humanizeRule: prefix pattern matching for lesson:/course_start:/course_done:/track_done:/book_N:slug (with a small BOOK_SLUG_NAMES map: nhb→Nahj al-Balagha, alkafi/kafi→Al-Kafi, bikar/bihar→Bihar al-Anwar, etc.) plus a known-slug table for streak_7/streak_30/identify_daif/perfect_5/weekly_xp_500/first_lesson; final fallback splits on _.
+  * Legend strip at bottom explaining rarity + tier color tokens.
+  * Loading: skeleton grid mirroring the layout (round skeletons for badges, count-aware). Error: destructive Alert. Per-section empty states for filtered views (e.g. "No badges earned yet — keep studying!").
+- Created src/components/views/notes-view.tsx ("use client", named export NotesView):
+  * Parallel fetches useApi<{ notes: NoteDto[] }>("/api/notes") and useApi<{ bookmarks: BookmarkDto[] }>("/api/bookmarks"); loading = either in flight, error = either failed.
+  * Header Card with counts (notes emerald badge, bookmarks amber badge).
+  * Tabs (All / Notes / Bookmarks) with live count pills on each trigger.
+  * UnifiedEntry discriminated union ({ kind:"note", data } | { kind:"bookmark", data }); helpers extract bookTitle/lessonTitle/locator/snippet/noteBody/lessonId/textUnitId/timestamp uniformly. groupKey: textUnitBookTitle ?? (lessonTitle ? "Lessons" : "Unsorted").
+  * Groups rendered as Cards with header (book icon + title + item-count Badge) and a scrollable entry list (max-h-96 overflow-y-auto ilm-scroll) separated by <Separator/>.
+  * EntryRow: kind icon (StickyNote emerald / Bookmark amber), mono locator (text-[11px]) + timestamp + kind Badge, line-clamp-2 snippet, personal note shown in a dashed sub-box with "Your note" label. Actions row: "Jump to lesson" (openLesson) when lessonId exists, else "Open in Library" (setView('library')) when only textUnitId; Edit (notes only) toggles inline Textarea + Save/Cancel (Save → PATCH /api/notes/[id] body { body }, bumpRefresh + toast); Delete with AlertDialog confirmation (notes → DELETE /api/notes/[id], bookmarks → DELETE /api/bookmarks/[id]; destructive rose-tinted action button; bumpRefresh + toast on success). Saving/deleting states disable buttons.
+  * Empty state: dashed Card with Inbox icon, contextual message per tab, and a "Browse the Library" Button → setView('library').
+  * Loading: 2-card skeleton with entry rows. Error: destructive Alert with AlertCircle. AnimatePresence + layout animations on group cards and entry rows for smooth add/remove.
+- Verified: `bunx tsc --noEmit` reports ZERO errors in either new file (remaining errors are all pre-existing in .next/dev/types validator, examples/, skills/). `bunx eslint` on both files: clean, zero warnings.
+
+Stage Summary:
+- Two production-ready client view components delivered; both compile, typecheck, and lint clean.
+- AchievementsView: full badge & medal showcase with rarity/tier coloring, hexagonal medal shields, earned/locked filtering, tooltips with humanized unlock criteria + award dates, summary progress bars, framer-motion stagger reveals.
+- NotesView: unified notes+bookmarks workspace grouped by source book, inline note editing, confirmed deletes via AlertDialog, smart "jump to lesson / open in library" routing, scrollable groups, graceful loading/error/empty states.
+- No files outside the two requested view files were modified. All imports resolve via @/ aliases; both views already wired into app-shell.tsx (lines 28-29, 367-368).
+
+---
+Task ID: F8a+F8b
+Agent: full-stack-developer
+Task: Built the AuthoringView (scholar curriculum-authoring tool) and MyReviewsView (scholar review audit trail) client components — spec §8 follow-up build.
+
+Work Log:
+- Read /home/z/my-project/worklog.md to align with prior contract; inspected shared infra (types.ts → AuthoringNode, MyReviewItem, TextUnitDto, Difficulty; store.ts → role/bumpRefresh/setView/setRole; use-api.ts; api.ts; ArabicText + GradeBadge ilm components; shadcn new-york primitives; the existing /api/authoring/* routes (tracks POST/PATCH/DELETE, courses POST, chapters POST, lessons POST, exercises POST) and /api/review/my-reviews GET).
+- Confirmed MadhabBadge is NOT present in src/components/ilm (Task 9+11 had made the same observation); rendered an inline `MadhabPill` to avoid breaking imports.
+- Wrote /home/z/my-project/src/components/views/authoring-view.tsx ("use client", named export AuthoringView):
+  * Role gate: non-scholar users get a friendly AccessDenied Card with a "Switch to scholar" button (real gate is server-side on /api/authoring/* which requires role==='reviewer').
+  * Fetches the curriculum tree via `useApi<{ tree: AuthoringNode[] }>("/api/authoring")`. Loading → two-column skeleton; error → destructive Alert with Retry (calls bumpRefresh).
+  * Header card with ilm-pattern background, PenSquare icon, ilm-gradient-text title, and a dynamic breadcrumb (nodePath(tree, selectedId)) that appears once a node is selected.
+  * Two-panel layout: `grid-cols-1 lg:grid-cols-[320px_1fr]`.
+  * LEFT — TreePanel (Card, sticky on lg): Collapsible recursive TreeRow component (4 levels: track→course→chapter→lesson). Each row has a chevron toggle (auto-open at depth 0), a NodeIcon (FolderTree/BookOpen/Layers/FileText, emerald/amber/teal/foreground colored), the title, an inline MadhabPill on tracks, and a set of secondary badges (lessonCount, citedUnitCount with Quote icon, exerciseCount with ListChecks icon, difficulty pill on courses). Selected row gets `bg-primary/10 ring-1 ring-primary/40`. Scroll area: `max-h-[70vh] overflow-y-auto ilm-scroll`.
+  * RIGHT — AnimatePresence(mode=wait) panel that switches on the selected node's type:
+      · nothing selected → CreateTrackCard (POST /api/authoring/tracks) with title / madhabScope Select / accent color Select / icon Select / description Textarea.
+      · track selected → TrackDetailCard: inline editable form (PATCH /api/authoring/tracks/[id]), "Add course" Dialog (POST /api/authoring/courses with trackId/title/difficulty/description), "Delete track" AlertDialog confirm (DELETE) with destructive styling.
+      · course selected → CourseDetailCard: details header (difficulty pill + chapter/lesson counts), list of child chapters, "Add chapter" Dialog (POST /api/authoring/chapters with courseId/title).
+      · chapter selected → ChapterDetailCard: list of child lessons (with citedUnitCount/exerciseCount badges), "Add lesson" Dialog (POST /api/authoring/lessons with chapterId/title/contentBody/summary/estimatedMin/citedTextUnitIds). Cited TextUnit picker is a scrollable Checkbox list (max-h-64, ilm-scroll) populated from `useApi<{units:TextUnitDto[]}>("/api/library")` (reviewed units only by default) — each row shows bookTitle + mono locator + translation snippet.
+      · lesson selected → LessonDetailCard: shows citedUnitCount/exerciseCount summary, "Add exercise" Dialog (POST /api/authoring/exercises with lessonId/type/prompt/payload/xpReward/difficulty/sourceTextUnitId). Type select (mcq/fill_blank/ordering/matching) drives a per-type JSON payload placeholder (PAYLOAD_PLACEHOLDERS); payload validated via JSON.parse with toast on syntax error; source TextUnit selected from the reviewed-units list via Select.
+  * Every mutation: bumpRefresh() + toast.success / toast.error. All Dialog/AlertDialog bodies stay scrollable on small screens.
+- Wrote /home/z/my-project/src/components/views/my-reviews-view.tsx ("use client", named export MyReviewsView):
+  * Role gate: AccessDenied Card for non-scholar (API also enforces reviewer-only).
+  * Fetches `useApi<{ items: MyReviewItem[] }>("/api/review/my-reviews")`.
+  * Header card (ilm-pattern, History icon, ilm-gradient-text title, descriptive subtitle "A full audit trail of every TextUnit you have reviewed — for accountability.") + a "Open Review Queue" outline button → setView('review').
+  * 3-card stats strip (Total reviewed / Approved / Rejected) with tinted icon chips.
+  * Tabs filter (All / Approved / Rejected) with per-tab count badges and a "Showing X of Y" subtitle. Filter logic is a useMemo over items by status field (published → approved, rejected → rejected).
+  * Scrollable list `max-h-[70vh] overflow-y-auto ilm-scroll` of ReviewItemCard, each with framer-motion stagger (delay capped at 0.2s). Card shows: bookTitle + status badge (published→emerald Approved with CheckCircle2, rejected→rose Rejected with XCircle); optional AI-assisted badge (amber, Bot icon); mono locator (MapPin); ArabicText with `line-clamp-2`; translation snippet (line-clamp-3, muted); GradeBadge; reviewedAt formatted via toLocaleDateString; reviewNotes (if present) in a muted dashed box with StickyNote icon.
+  * Empty state (items.length===0): friendly Card with Inbox icon + descriptive text + Button → setView('review'). Filter-empty state: muted "No items match this filter." dashed box.
+  * Loading skeleton + destructive Alert on error.
+- Typechecked with `bunx tsc --noEmit`: ZERO errors in authoring-view.tsx or my-reviews-view.tsx (only pre-existing errors in .next/dev/types/validator.ts for the lessons PATCH route type mismatch, examples/websocket, skills/* — all outside this task's scope).
+- Linted both files with `bunx eslint`: clean (exit 0, no warnings).
+
+Stage Summary:
+- Two production-ready client view components delivered, type-clean and lint-clean, fully wired to the existing shared infra (store, useApi, apiFetch, shadcn new-york, framer-motion, sonner, ArabicText/GradeBadge ilm components) without modifying any other file.
+- AuthoringView implements spec §8 "Content Authoring": a scholar-only two-panel tool for building/editing the Track→Course→Chapter→Lesson→Exercise tree, with cited TextUnit multi-select grounded in reviewed library units (spec §4), exercise payloads with per-type JSON shapes, and proper CRUD (POST/PATCH/DELETE) against the existing /api/authoring/* routes.
+- MyReviewsView implements spec §8 "My Reviews": a scholar audit trail with status-aware filtering, stats, AI-assisted flag, and full per-item provenance (book/locator/grade/reviewNotes/reviewedAt).
+- Both views are responsive, dark-mode aware (emerald+gold semantic tokens via shadcn primitives), and use framer-motion for panel/list transitions.
+
+---
+Task ID: F1-F9 (Follow-up Build)
+Agent: orchestrator (main)
+Task: Complete follow-up build — 9 features extending the ILM platform.
+
+Work Log:
+- Schema: extended UserProfile with onboarded, interests, rtlOverride, dailyReminder*, streakAlertsEnabled, preferredTranslations. Re-pushed.
+- Seed: added Sunni secondary track (Sahih al-Bukhari book + TextUnit + track/course/lesson/exercise); set student onboarded=true + interests; assigned reviewedBy=scholar for My Reviews audit trail.
+- APIs: /api/search (global TextUnits+Courses+Tracks), /api/notes (CRUD), /api/bookmarks (CRUD), /api/review/my-reviews (audit trail), /api/authoring (tree + CRUD for tracks/courses/chapters/lessons/exercises), extended /api/profile/settings (madhab, language, interests, onboarded, rtlOverride, dailyReminder*, streakAlerts), extended /api/me (reviewer stats + settings fields).
+- Store: added searchOpen, userMadhab; View type extended with achievements/notes/settings/authoring/my-reviews/onboarding.
+- Shared components: MadhabBadge (blue for Sunni per spec), CitationStrip+Modal (tap to expand full TextUnit), CommandPalette (Cmd+K global search), ActivityHeatmap (reusable), DailyGoalRing.
+- AppShell rewrite: student nav (Dashboard/Library/Tracks/Learn/Profile/Achievements/Notes/Leaderboard + Settings), scholar nav entirely swapped (Review Queue/Content Authoring/Library/My Reviews), global search in header, onboarding gate, reviewer stats card for scholar, theme toggle moved to Settings.
+- Dashboard: added activity heatmap (17 weeks) + daily goal widget with progress ring.
+- LearnView: added CitationStrip under lesson title (tap opens full TextUnit modal).
+- TracksView: madhab pills on course cards (green Shia / blue Sunni).
+- Delegated 6 new views to 3 parallel subagents: Achievements+Notes, Settings+Onboarding, Authoring+MyReviews — all typecheck+lint clean.
+- Agent Browser end-to-end verification (all PASS):
+  1. Student nav: all 8 items + Settings + Search present.
+  2. Dashboard: heatmap (124 cells) + daily goal widget visible.
+  3. Achievements: 3/8 badges, 0/3 medals, All/Earned/Locked filter, rarity labels, locked criteria.
+  4. Notes: 3 bookmarks grouped by book, Jump-to-lesson, edit/delete.
+  5. Settings: 7 sections (Language/Madhab/Privacy/Notifications/Streak/Appearance/Onboarding), madhab switch works.
+  6. Global search (Cmd+K): grouped results (Tracks/Courses/TextUnits) with madhab+grade badges.
+  7. Scholar mode: nav entirely swapped, reviewer stats card (10 reviewed, 10 approved).
+  8. Content Authoring: curriculum tree (4 tracks, 4 courses), CRUD forms.
+  9. My Reviews: 10-item audit trail, All/Approved/Rejected filter.
+  10. Citation strip: present under lesson title, tap opens full TextUnit modal (Arabic+grade+reference).
+  11. Madhab tags: green SHIA / blue SUNNI pills on track + course cards.
+  12. Onboarding: 4-step flow (Welcome→Madhab→Language→Interests→Finish) completes to Dashboard.
+- Dev log: 43 requests all 200, zero errors. Lint exit 0. Typecheck zero src errors.
+
+Stage Summary:
+- All 9 follow-up features complete and browser-verified. Platform now has full student+scholar navigation, achievements, notes, settings, onboarding, global search, citation strips, madhab indicators, content authoring, and review audit trail.
