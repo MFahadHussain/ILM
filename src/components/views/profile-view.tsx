@@ -13,6 +13,9 @@ import {
   Eye,
   Target,
   BookCheck,
+  Pencil,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 import { useApi } from "@/lib/use-api";
 import { useStore } from "@/lib/store";
@@ -51,6 +54,15 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 // ------------------------------------------------------------------
 // Helpers
@@ -550,10 +562,93 @@ function StatChip({
 // ------------------------------------------------------------------
 // ProfileView
 // ------------------------------------------------------------------
+function EditProfileDialog({
+  open,
+  onOpenChange,
+  profile,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  profile: ProfileDto;
+  onSaved: () => void;
+}) {
+  const [displayName, setDisplayName] = React.useState(profile.displayName);
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open) setDisplayName(profile.displayName);
+  }, [open, profile.displayName]);
+
+  async function save() {
+    if (!displayName.trim()) {
+      toast.error("Display name cannot be empty.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch("/api/profile/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ displayName: displayName.trim() }),
+      });
+      toast.success("Profile updated.");
+      onSaved();
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update profile.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit profile</DialogTitle>
+          <DialogDescription>
+            Update your display name. This appears on your profile and the leaderboard.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="flex items-center gap-4">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-amber-500 text-xl font-extrabold text-white shadow-md">
+              {initials(displayName || profile.displayName)}
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="displayName" className="mb-1.5 block">
+                Display name
+              </Label>
+              <Input
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                maxLength={40}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={saving || !displayName.trim()}>
+            {saving ? <Loader2 className="size-4 animate-spin" /> : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ProfileView() {
   const { data, loading, error } = useApi<{ profile: ProfileDto }>("/api/me");
   const profile = data?.profile;
   const [tab, setTab] = React.useState("overview");
+  const [editOpen, setEditOpen] = React.useState(false);
+  const bumpRefresh = useStore((s) => s.bumpRefresh);
+  const logout = useStore((s) => s.logout);
 
   if (loading) {
     return (
@@ -666,6 +761,30 @@ export function ProfileView() {
                   </div>
                 </div>
               </div>
+
+              {/* Action buttons */}
+              <div className="relative flex items-center gap-2 border-t bg-card/40 px-6 py-3">
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="size-3.5" />
+                  Edit profile
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-500/10"
+                  onClick={() => logout()}
+                >
+                  <LogOut className="size-3.5" />
+                  Sign out
+                </Button>
+              </div>
+
+              <EditProfileDialog
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                profile={profile}
+                onSaved={() => bumpRefresh()}
+              />
 
               {/* Stat chips */}
               <div className="relative grid grid-cols-2 gap-2 border-t bg-card/40 p-4 md:grid-cols-3 lg:grid-cols-6">

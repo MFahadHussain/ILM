@@ -5,7 +5,7 @@ import {
   LayoutDashboard, LibraryBig, GraduationCap, BookOpen, User as UserIcon,
   Trophy, ShieldCheck, Menu, Sparkles, ChevronRight, Settings as SettingsIcon,
   Award, StickyNote, Search, PenSquare, History, Moon, Sun, ClipboardCheck,
-  CheckCircle2, XCircle, Clock,
+  CheckCircle2, XCircle, Clock, LogOut,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useApi } from "@/lib/use-api";
@@ -31,6 +31,7 @@ import { SettingsView } from "@/components/views/settings-view";
 import { AuthoringView } from "@/components/views/authoring-view";
 import { MyReviewsView } from "@/components/views/my-reviews-view";
 import { OnboardingView } from "@/components/views/onboarding-view";
+import { LoginView } from "@/components/views/login-view";
 
 interface NavItem {
   label: string;
@@ -137,7 +138,7 @@ function StudentCard({ profile }: { profile: ProfileDto }) {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { view, setView, role, setRole, setSearchOpen } = useStore();
+  const { view, setView, role, setRole, setSearchOpen, logout } = useStore();
   const { data } = useApi<{ profile: ProfileDto }>("/api/me");
   const profile = data?.profile;
   const nav = role === "scholar" ? SCHOLAR_NAV : STUDENT_NAV;
@@ -209,6 +210,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             Settings
           </button>
         )}
+        <button
+          onClick={() => { logout(); onNavigate?.(); }}
+          className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+        >
+          <LogOut className="size-4.5 shrink-0" />
+          Sign out
+        </button>
         <div className="mb-2 flex items-center justify-between rounded-lg bg-muted/60 p-1 text-xs font-semibold">
           <button
             onClick={() => setRole("student")}
@@ -247,16 +255,21 @@ function HeaderSearchButton() {
 }
 
 export function AppShell() {
-  const { view, role } = useStore();
+  const { view, role, isAuthenticated } = useStore();
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const { data } = useApi<{ profile: ProfileDto }>("/api/me");
+  const { data } = useApi<{ profile: ProfileDto }>(isAuthenticated ? "/api/me" : null);
   const profile = data?.profile;
+  const setUserMadhab = useStore((s) => s.setUserMadhab);
 
   // Sync userMadhab from profile
-  const setUserMadhab = useStore((s) => s.setUserMadhab);
   React.useEffect(() => {
     if (profile?.madhab) setUserMadhab(profile.madhab);
   }, [profile?.madhab, setUserMadhab]);
+
+  // Auth gate: if not authenticated, show the login page
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
 
   // Onboarding gate: if student and not onboarded, show onboarding
   if (profile && !profile.onboarded && role === "student" && view !== "onboarding") {
@@ -391,6 +404,18 @@ export function AppShell() {
                   <ChevronRight className="size-3" />
                   <span className="font-mono">v0.2</span>
                 </div>
+              </div>
+              <div className="mt-3 border-t pt-3 text-center text-xs text-muted-foreground">
+                Built by{" "}
+                <a
+                  href="https://fahadai.netlify.app/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Fahad Hussain
+                </a>{" "}
+                <span className="text-muted-foreground/60">· Developer</span>
               </div>
             </div>
           </footer>

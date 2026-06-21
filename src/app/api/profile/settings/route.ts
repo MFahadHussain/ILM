@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 
-// Update privacy / display / onboarding / madhab-track settings.
-// Madhab is on the User model; everything else on UserProfile.
+// Update privacy / display / onboarding / madhab-track / profile settings.
+// Madhab + avatar + name live on the User model; everything else on UserProfile.
 export async function PATCH(req: Request) {
   const user = await getCurrentUser(req);
   if (!user || !user.profile) {
@@ -14,6 +14,7 @@ export async function PATCH(req: Request) {
     publicProfile, leaderboardOptIn, dailyGoalXp,
     language, rtlOverride, madhab, onboarded, interests,
     dailyReminderEnabled, dailyReminderTime, streakAlertsEnabled,
+    displayName, avatar,
   } = body as {
     publicProfile?: boolean;
     leaderboardOptIn?: boolean;
@@ -26,6 +27,8 @@ export async function PATCH(req: Request) {
     dailyReminderEnabled?: boolean;
     dailyReminderTime?: string | null;
     streakAlertsEnabled?: boolean;
+    displayName?: string;
+    avatar?: string | null;
   };
 
   const profileData: Record<string, unknown> = {};
@@ -39,17 +42,23 @@ export async function PATCH(req: Request) {
   if (typeof dailyReminderEnabled === "boolean") profileData.dailyReminderEnabled = dailyReminderEnabled;
   if (dailyReminderTime !== undefined) profileData.dailyReminderTime = dailyReminderTime || null;
   if (typeof streakAlertsEnabled === "boolean") profileData.streakAlertsEnabled = streakAlertsEnabled;
+  if (typeof displayName === "string" && displayName.trim()) profileData.displayName = displayName.trim();
 
-  // madhab lives on User — changing it re-filters the whole app
+  // User-level fields: madhab, avatar, name
+  const userData: Record<string, unknown> = {};
   if (typeof madhab === "string" && (madhab === "shia" || madhab === "sunni")) {
-    if (user.madhab !== madhab) {
-      await db.user.update({ where: { id: user.id }, data: { madhab } });
-    }
+    userData.madhab = madhab;
+  }
+  if (avatar !== undefined) userData.avatar = avatar || null;
+  if (typeof displayName === "string" && displayName.trim()) userData.name = displayName.trim();
+
+  if (Object.keys(userData).length > 0) {
+    await db.user.update({ where: { id: user.id }, data: userData });
   }
 
   if (Object.keys(profileData).length > 0) {
     await db.userProfile.update({ where: { userId: user.id }, data: profileData });
-  } else if (typeof madhab !== "string") {
+  } else if (Object.keys(userData).length === 0) {
     return NextResponse.json({ error: "no fields" }, { status: 400 });
   }
   return NextResponse.json({ ok: true });

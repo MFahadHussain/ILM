@@ -351,3 +351,29 @@ Work Log:
 
 Stage Summary:
 - All 9 follow-up features complete and browser-verified. Platform now has full student+scholar navigation, achievements, notes, settings, onboarding, global search, citation strips, madhab indicators, content authoring, and review audit trail.
+
+---
+Task ID: AUTH+FOLLOWUP
+Agent: orchestrator (main)
+Task: Login page, complete profile (edit dialog), developer credit.
+
+Work Log:
+- Store: added auth state (isAuthenticated, login/logout) with localStorage persistence; initial view respects role (scholar→review, student→dashboard).
+- API: extended /api/profile/settings PATCH to accept displayName + avatar (User-level fields).
+- LoginView: full-screen branded login with hero panel (Arabic hadith, feature list), quick demo access (Student/Scholar buttons), email/password form with show/hide password, sign-in/sign-up toggle. Footer credit "Built by Fahad Hussain · Developer" with link to https://fahadai.netlify.app/.
+- AppShell: auth gate at top (if !isAuthenticated → LoginView); fixed React Hooks order (all hooks before conditional returns); added Sign out button in sidebar footer; added "Built by Fahad Hussain · Developer" credit to main footer.
+- ProfileView: added EditProfileDialog (display name edit with live initials preview, PATCH /api/profile/settings, toast feedback, bumpRefresh); added Edit Profile + Sign out buttons in profile header.
+- Agent Browser verification (all PASS):
+  1. Login page renders: hero panel, Arabic hadith, quick demo access, email/password form.
+  2. Quick Student login → Dashboard, sidebar profile, footer credit.
+  3. Sign out → back to login page.
+  4. Email/password login as scholar (reviewer@ilm.dev) → Scholar Review Queue.
+  5. Login persists across page reload (localStorage).
+  6. Scholar starts on Review Queue, Student on Dashboard (role-aware initial view).
+  7. Edit Profile dialog: opens, changes display name, saves, toast "Profile updated.", name updates live.
+  8. Footer credit "Built by Fahad Hussain · Developer" with link on both login page and main app.
+  9. Sign out button in sidebar footer + profile header.
+- Dev log: 40 requests all 200, zero errors. Lint exit 0. Typecheck zero src errors.
+
+Stage Summary:
+- Login page, complete profile (edit dialog + sign out), and developer credit all built and browser-verified.
