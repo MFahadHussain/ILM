@@ -16,15 +16,18 @@ export async function apiFetch<T = unknown>(
     headers.set("content-type", "application/json");
   }
   const res = await fetch(path, { ...init, headers });
+  const text = await res.text();
   if (!res.ok) {
     let msg = `request failed (${res.status})`;
-    try {
-      const j = await res.json();
-      msg = j.error ?? msg;
-    } catch {
-      /* ignore */
+    if (text) {
+      try {
+        const j = JSON.parse(text);
+        msg = j.error ?? msg;
+      } catch {
+        /* ignore */
+      }
     }
     throw new Error(msg);
   }
-  return res.json() as Promise<T>;
+  return (text ? JSON.parse(text) : {}) as T;
 }

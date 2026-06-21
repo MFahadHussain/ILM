@@ -26,11 +26,18 @@ export function useApi<T>(path: string | null) {
     setError(null);
     fetch(path, { headers: { "x-ilm-user": authHeader } })
       .then(async (res) => {
+        const text = await res.text();
         if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error ?? `error ${res.status}`);
+          let errorMsg = `error ${res.status}`;
+          if (text) {
+            try {
+              const j = JSON.parse(text);
+              errorMsg = j.error ?? errorMsg;
+            } catch {}
+          }
+          throw new Error(errorMsg);
         }
-        return res.json();
+        return text ? JSON.parse(text) : null;
       })
       .then((j) => {
         if (active) {
